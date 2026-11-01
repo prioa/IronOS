@@ -359,7 +359,7 @@ void ui_draw_soldering_basic_sleep(TemperatureType_t tipTemp) { drawSleepScreen(
 
 /*
  * Home, the iron is not heating; the power supply is always in the key row because it decides how hard the iron can heat
- *   [ head ]     ZIEL 320°                  <- set point; while still hot HEISS, the tip temperature and a small arrow
+ *   [ head ]  GESAMT 42:17                 <- total soldering time; while still hot HEISS, the tip temperature and a small arrow
  *   [=] MENÜ     20V 90W      LÖTEN [>]
  * Picking the iron up after it lay still makes the dog run across and bark; alerts replace everything else.
  */
@@ -414,24 +414,45 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
     drawHeadClipped(flip ? 0 : OLED_WIDTH - DOG_HEAD_WIDTH, bark ? dogHeadBark : dogHead);
   }
 
-  // Big value: the set point, or the tip temperature while it is still hot
+  // Big value: the total soldering time, or the tip temperature while it is still hot
   if (tipTemp > 55) {
     tempOnDisplay = true;
   } else if (tipTemp < 45) {
     tempOnDisplay = false;
   }
-  const char    *word  = tempOnDisplay ? DOG_T("HEISS", "HOT") : DOG_T("ZIEL", "SET");
-  const uint16_t value = tempOnDisplay ? tipTemp : getSettingValue(SettingsOptions::SolderingTemp);
-  const uint8_t  wordW = dogTextWidth(dogFontSmall, word);
-  const int16_t  areaX = flip ? DOG_HEAD_WIDTH : 0;
-  const uint8_t  areaW = OLED_WIDTH - DOG_HEAD_WIDTH;
-  const int16_t  x     = areaX + (areaW - (wordW + 3 + TEMP_WIDTH)) / 2;
-  if (!running && !(tempOnDisplay && getSettingValue(SettingsOptions::CoolingTempBlink) && (now % 1000 < 300))) {
-    dogSmall(x, word, 15);
-    dogBig(x + wordW + 3, value);
-    if (tempOnDisplay) {
+  const int16_t areaX = flip ? DOG_HEAD_WIDTH : 0; // the part of the screen next to the head
+  const uint8_t areaW = OLED_WIDTH - DOG_HEAD_WIDTH;
+  if (running) {
+    // The dog has the upper part of the screen to itself
+  } else if (tempOnDisplay) {
+    const char   *word  = DOG_T("HEISS", "HOT");
+    const uint8_t wordW = dogTextWidth(dogFontSmall, word);
+    const int16_t x     = areaX + (areaW - (wordW + 3 + TEMP_WIDTH)) / 2;
+    if (!(getSettingValue(SettingsOptions::CoolingTempBlink) && (now % 1000 < 300))) {
+      dogSmall(x, word, 15);
+      dogBig(x + wordW + 3, tipTemp);
       dogBlit(x + (wordW - 8) / 2, 16, 8, 8, iconArrowDown8);
       OLED::drawFilledRect(x + (wordW - 8) / 2, 23, x + (wordW - 8) / 2 + 7, 23, true);
+    }
+  } else {
+    // h:mm up to 99 hours, then the hours alone with a small H
+    const uint16_t minutes = getSettingValue(SettingsOptions::TotalSolderMinutes);
+    const bool     inHours   = minutes / 60 >= 100;
+    char           text[8];
+    if (inHours) {
+      dogFormat(text, minutes / 60);
+    } else {
+      dogFormatTime(text, minutes / 60, minutes % 60);
+    }
+    const char   *word  = DOG_T("GESAMT", "TOTAL");
+    const uint8_t wordW = dogTextWidth(dogFontSmall, word);
+    const uint8_t bigW  = dogTextWidth(dogFontMid, text); // the large digits would not fit next to the word and the head
+    const uint8_t unitW = inHours ? 2 + dogTextWidth(dogFontSmall, "H") : 0;
+    const int16_t x     = areaX + (areaW - (wordW + 3 + bigW + unitW)) / 2;
+    dogSmall(x, word, 15);
+    dogText(dogFontMid, x + wordW + 3, 20, text);
+    if (inHours) {
+      dogSmall(x + wordW + 3 + bigW + 2, "H", 20);
     }
   }
 

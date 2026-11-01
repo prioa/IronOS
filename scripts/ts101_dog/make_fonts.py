@@ -13,7 +13,7 @@ UMLAUT_BASE = {'Ä': 'A', 'Ö': 'O', 'Ü': 'U'}
 # name: (ttf, size, characters, pages, row of the baseline inside the glyph)
 FONTS = {
     'Big':   ('BarlowCondensed-SemiBold.ttf', 28, DIGITS, 3, 22),      # the large temperature
-    'Mid':   ('BarlowCondensed-SemiBold.ttf', 22, DIGITS, 2, 16),      # the temperature next to the sleeping dog
+    'Mid':   ('BarlowCondensed-SemiBold.ttf', 22, DIGITS + ':', 2, 16),  # the temperature next to the sleeping dog, the total time
     'Head':  ('Barlow-SemiBold.ttf', 19, UPPER + 'ÄÖÜ', 3, 22),        # menu values and full screen notices
     'Small': ('Silkscreen-Regular.ttf', 8, SMALL + 'ÄÖÜ', 1, 7),       # the small row, umlaut dots set by hand
 }

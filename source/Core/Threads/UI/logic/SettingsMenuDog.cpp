@@ -298,6 +298,8 @@ static void stepValue(const DogMenuItem &item, bool up) {
 // ---- Drawing ----
 #define ROWS        3
 #define ROW_HEIGHT  8
+#define LIST_TOP    8   // row 0-7 is the fixed title with the keys
+#define TITLE_ROW   0
 #define VALUE_RIGHT 124 // values end here, the scroll bar is on column 127
 static uint8_t top = 0; // the first row on screen
 
@@ -321,8 +323,8 @@ static void drawSwitch(int16_t x1, int16_t y, bool on) {
 static uint8_t listCount(uint8_t section) { return section == NO_SECTION ? SECTION_COUNT : sections[section].count; }
 
 static void drawRow(uint8_t section, uint8_t index, uint8_t row, bool selected, bool editingValue) {
-  const int16_t base = row * ROW_HEIGHT + 7;
-  const int16_t y0   = row * ROW_HEIGHT;
+  const int16_t y0   = LIST_TOP + row * ROW_HEIGHT;
+  const int16_t base = y0 + 7;
   if (section == NO_SECTION) {
     dogSmall(2, T(sections[index].de, sections[index].en), base);
     if (index == 0) {
@@ -369,22 +371,30 @@ static void drawList(uint8_t section, uint8_t pos, bool editingValue) {
     drawRow(section, top + row, row, top + row == pos, editingValue && top + row == pos);
   }
   // Scroll bar: where the three rows are in the whole list
-  const uint8_t span = 23;
+  const uint8_t span = OLED_HEIGHT - LIST_TOP;
   const uint8_t len  = count > ROWS ? span * ROWS / count : span;
-  const uint8_t y    = count > ROWS ? (span - len) * top / (count - ROWS) : 0;
+  const uint8_t y    = LIST_TOP + (count > ROWS ? (span - len) * top / (count - ROWS) : 0);
   OLED::drawFilledRect(OLED_WIDTH - 1, y, OLED_WIDTH - 1, y + len - 1, false);
 }
 
-static const char *listTitle(uint8_t section) { return section == NO_SECTION ? T("MENÜ", "MENU") : T(sections[section].de, sections[section].en); }
+// "SCHLAF 2/4": the name of the list and where the marked row is in it
+static void formatTitle(uint8_t section, uint8_t pos, char *out) {
+  strcpy(out, section == NO_SECTION ? T("MENÜ", "MENU") : T(sections[section].de, sections[section].en));
+  char *end = out + strlen(out);
+  *end++    = ' ';
+  end       = dogFormat(end, pos + 1);
+  *end++    = '/';
+  dogFormat(end, listCount(section));
+}
 
-// The key row: back and next as icons, the name of the list between them; or the help text, or "saved"
-static void drawListKeys(uint8_t section, const DogMenuItem *item) {
+// The fixed top row: back and next next to their buttons, the title between them; or the help text, or "saved"
+static void drawTitleRow(uint8_t section, uint8_t pos, const DogMenuItem *item) {
   const char *holdDe = "HALTEN: ÖFFNEN", *holdEn = "HOLD: OPEN";
   if (item && item->format != Fmt::Action) {
     holdDe = isSwitch(*item) ? "HALTEN: UMSCHALTEN" : "HALTEN: ÄNDERN";
     holdEn = isSwitch(*item) ? "HOLD: SWITCH" : "HOLD: CHANGE";
   }
-  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL) || dogDrawHold(T(holdDe, holdEn), true, DOG_HOLD_FULL)) {
+  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL, TITLE_ROW) || dogDrawHold(T(holdDe, holdEn), true, DOG_HOLD_FULL, TITLE_ROW)) {
     return;
   }
   const TickType_t now = xTaskGetTickCount();
@@ -393,41 +403,43 @@ static void drawListKeys(uint8_t section, const DogMenuItem *item) {
     const char   *saved = T("GESPEICHERT", "SAVED");
     const uint8_t w     = dogTextWidth(dogFontSmall, saved) + 9;
     const int16_t x     = (OLED_WIDTH - w) / 2;
-    OLED::drawArea(x, 24, 8, 8, iconCheck);
-    dogSmall(x + 9, saved);
+    OLED::drawArea(x, TITLE_ROW, 8, 8, iconCheck);
+    dogSmall(x + 9, saved, TITLE_ROW + 7);
   } else if (helpShowing) {
     // The explanation runs between the icons until a button is pressed
     const char   *text  = T(item->helpDe, item->helpEn);
     const int16_t width = dogTextWidth(dogFontSmall, text) + 32;
-    dogSmall(OLED_WIDTH - 10 - (int16_t)(((now - lastButtonTime - HELP_TICKS) / (TICKS_100MS / 2)) % (width + OLED_WIDTH - 20)), text);
-    OLED::drawFilledRect(0, 23, 9, 31, true);
-    OLED::drawFilledRect(OLED_WIDTH - 10, 23, OLED_WIDTH - 1, 31, true);
+    dogSmall(OLED_WIDTH - 10 - (int16_t)(((now - lastButtonTime - HELP_TICKS) / (TICKS_100MS / 2)) % (width + OLED_WIDTH - 20)), text, TITLE_ROW + 7);
+    OLED::drawFilledRect(0, TITLE_ROW, 9, TITLE_ROW + 7, true);
+    OLED::drawFilledRect(OLED_WIDTH - 10, TITLE_ROW, OLED_WIDTH - 1, TITLE_ROW + 7, true);
   } else {
-    dogSmallCentre(10, OLED_WIDTH - 11, listTitle(section));
+    char title[24];
+    formatTitle(section, pos, title);
+    dogSmallCentre(10, OLED_WIDTH - 11, title, TITLE_ROW + 7);
   }
-  dogDrawCorners(iconNext, iconBack);
+  dogDrawCorners(iconNext, iconBack, TITLE_ROW);
 }
 
 void dogDrawMenuList(uint8_t section, uint8_t pos) {
   drawList(section, pos, false);
-  drawListKeys(section, section == NO_SECTION ? nullptr : &sections[section].items[pos]);
+  drawTitleRow(section, pos, section == NO_SECTION ? nullptr : &sections[section].items[pos]);
 }
 
 void dogDrawMenuValue(uint8_t section, uint8_t pos) {
   drawList(section, pos, true);
-  if (dogDrawHold(T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL)) {
+  if (dogDrawHold(T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL, TITLE_ROW)) {
     return;
   }
-  dogDrawCorners(iconPlus, iconBack);
+  dogDrawCorners(iconPlus, iconBack, TITLE_ROW);
   // Runs down over the 2 s until the value saves itself
   const TickType_t idle = xTaskGetTickCount() - lastButtonTime;
   const uint8_t    fill = idle >= DOG_ADJUST_TIMEOUT ? 0 : (44 * (DOG_ADJUST_TIMEOUT - idle)) / DOG_ADJUST_TIMEOUT;
-  OLED::drawFilledRect(40, 26, 88, 26, false);
-  OLED::drawFilledRect(40, 29, 88, 29, false);
-  OLED::drawFilledRect(40, 26, 40, 29, false);
-  OLED::drawFilledRect(88, 26, 88, 29, false);
+  OLED::drawFilledRect(40, 2, 88, 2, false);
+  OLED::drawFilledRect(40, 5, 88, 5, false);
+  OLED::drawFilledRect(40, 2, 40, 5, false);
+  OLED::drawFilledRect(88, 2, 88, 5, false);
   if (fill) {
-    OLED::drawFilledRect(42, 27, 42 + fill, 28, false);
+    OLED::drawFilledRect(42, 3, 42 + fill, 4, false);
   }
 }
 
@@ -455,6 +467,19 @@ const char *dogMenuRowOverflow() {
         if (2 + dogTextWidth(dogFontSmall, label) + 5 + widest > VALUE_RIGHT) {
           return label;
         }
+      }
+    }
+  }
+  for (uint8_t lang = 0; lang < 2; lang++) {
+    for (uint8_t sct = 0; sct <= SECTION_COUNT; sct++) {
+      const uint8_t section = sct == SECTION_COUNT ? NO_SECTION : sct;
+      if (section != NO_SECTION && !sections[section].count) {
+        continue;
+      }
+      char title[24];
+      formatTitle(section, listCount(section) - 1, title);
+      if (dogTextWidth(dogFontSmall, title) > OLED_WIDTH - 22) {
+        return lang ? sections[sct % SECTION_COUNT].en : sections[sct % SECTION_COUNT].de;
       }
     }
   }
@@ -539,8 +564,7 @@ OperatingMode gui_SettingsMenu(const ButtonState buttonsIn, guiContext *cxt) {
   }
   const uint8_t count = openSection == NO_SECTION ? SECTION_COUNT : sections[openSection].count;
   if (buttons == BUTTON_F_SHORT) {
-    position            = (position + 1) % count;
-    cxt->transitionMode = TransitionAnimation::Down;
+    position = (position + 1) % count; // only the marked row moves: no screen transition
   } else if (dogHoldDone(true, DOG_HOLD_FULL)) {
     dogPressConsumed();
     if (openSection == NO_SECTION) {

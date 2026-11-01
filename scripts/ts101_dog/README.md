@@ -15,8 +15,9 @@ The screens use a 128x32 grid: stage on rows 0-22, row 23 for umlaut dots, key r
 - **Key row** (`ts101_dog_keys.cpp`): reads `getButtonA/getButtonB` directly. A pressed button inverts its field; held, the
   row fills from that button's side with what will happen, letting go cancels. A press that did its job (a stop, a wake-up)
   counts for nothing more until released.
-- **Home**: dog head, the set point (HEISS and the tip while it is still hot), key row LÖTEN | supply | MENÜ.
-  Front click solders, rear click opens the menu, front hold opens the temperature, rear hold does nothing.
+- **Home**: dog head, the total soldering time (GESAMT h:mm, only hours from 100 h on; HEISS and the tip while it is still
+  hot), key row LÖTEN | supply | MENÜ. Front click solders, rear click opens the menu, front hold opens the temperature,
+  rear hold does nothing.
 - **Soldering**: heating up, the dog runs and the curve grows in the bottom row; at temperature no dog, but set point, input
   volts and handle temperature, a 27 px curve and the tip temperature; the bottom row changes by itself: WUFF! BEREIT,
   session time, watts with a load bar, sleep countdown. Rear click: the second view, a 72 px curve with watts, volts and
@@ -25,12 +26,13 @@ The screens use a 128x32 grid: stage on rows 0-22, row 23 for umlaut dots, key r
   10 by default), front hold one preset further (300/350/400, `TS101_PRESETS_C`), never to the maximum; on a preset the
   use is shown instead of the curve. Closes after 2 s or with rear hold. Clicks right after a boost are ignored
   (upstream #1663). Changes made while soldering are saved on the home screen.
-- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels, shown as
-  lists of three rows (name left, value right, the picked row inverted, a scroll bar on the right edge). The rear button
-  always goes back, click or hold; a front click moves to the next row, holding it opens a list, flips a switch (on/off
-  settings and the unit) or makes the value in the row editable: then a front click raises it (wrapping round at the top),
-  holding it raises it faster, the rear button is done. Each value saves itself when it is left. After 3 s a help text
-  runs through the key row.
+- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels. A fixed top
+  row holds the back and next arrows next to their buttons and the title with the position (SCHLAF 2/4); below it three
+  rows, name left, value right, the picked row inverted, a scroll bar on the right edge. Moving to the next row only moves
+  the mark, the screen does not slide. The rear button always goes back, click or hold; a front click moves to the next
+  row, holding it opens a list, flips a switch (on/off settings and the unit) or makes the value in the row editable: then
+  a front click raises it (wrapping round at the top), holding it raises it faster, the rear button is done. Hold bars,
+  "saved" and the help text after 3 s use the top row. Each value saves itself when it is left.
 - **Info**: five pages (power, tip, handle and side, statistics, system), the same buttons as the menu; holding the front
   button on System shows the raw debug values.
 - **Sleep**: the dog lies down; tip temperature, time asleep, HEBEN!. Any button wakes the iron and does nothing else.

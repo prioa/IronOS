@@ -139,31 +139,35 @@ static bool frontOnRight() { return OLED::getRotation() != (getSettingValue(Sett
 
 int16_t dogFrontKeyX() { return OLED::getRotation() ? OLED_WIDTH - KEY_ICON_WIDTH : 0; }
 
+// The rows a key or a hold bar covers: the key row at the bottom (24, with row 23 for its umlaut dots), or the top row (0)
+static uint8_t fieldTop(uint8_t row) { return row ? row - 1 : 0; }
+static uint8_t textBase(uint8_t row) { return row ? row + 6 : 7; }
+
 // Returns the free column next to the key, towards the middle
-static int16_t drawKey(DogKey key, bool front) {
+static int16_t drawKey(DogKey key, bool front, uint8_t row = DOG_KEY_ROW) {
   const bool    right = front == frontOnRight();
   const uint8_t textW = key.text ? dogTextWidth(dogFontSmall, key.text) : 0;
   const uint8_t w     = (key.icon ? KEY_ICON_WIDTH : 0) + (key.icon && key.text ? 1 : 0) + textW;
   if (right) {
     if (key.text) {
-      dogSmall(OLED_WIDTH - w, key.text);
+      dogSmall(OLED_WIDTH - w, key.text, textBase(row));
     }
     if (key.icon) {
-      OLED::drawArea(OLED_WIDTH - KEY_ICON_WIDTH, 24, KEY_ICON_WIDTH, 8, key.icon);
+      OLED::drawArea(OLED_WIDTH - KEY_ICON_WIDTH, row, KEY_ICON_WIDTH, 8, key.icon);
     }
     if (w && dogPressed(front)) {
-      OLED::invertRect(OLED_WIDTH - 1 - w, 23, OLED_WIDTH - 1, 31);
+      OLED::invertRect(OLED_WIDTH - 1 - w, fieldTop(row), OLED_WIDTH - 1, row + 7);
     }
     return OLED_WIDTH - w - 3;
   }
   if (key.icon) {
-    OLED::drawArea(0, 24, KEY_ICON_WIDTH, 8, key.icon);
+    OLED::drawArea(0, row, KEY_ICON_WIDTH, 8, key.icon);
   }
   if (key.text) {
-    dogSmall(key.icon ? KEY_ICON_WIDTH + 1 : 0, key.text);
+    dogSmall(key.icon ? KEY_ICON_WIDTH + 1 : 0, key.text, textBase(row));
   }
   if (w && dogPressed(front)) {
-    OLED::invertRect(0, 23, w, 31);
+    OLED::invertRect(0, fieldTop(row), w, row + 7);
   }
   return w + 2;
 }
@@ -178,12 +182,12 @@ void dogDrawKeys(DogKey front, DogKey rear, const char *centre) {
   }
 }
 
-void dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon) {
-  drawKey({frontIcon, nullptr}, true);
-  drawKey({rearIcon, nullptr}, false);
+void dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon, uint8_t row) {
+  drawKey({frontIcon, nullptr}, true, row);
+  drawKey({rearIcon, nullptr}, false, row);
 }
 
-bool dogDrawHold(const char *text, bool front, TickType_t full) {
+bool dogDrawHold(const char *text, bool front, TickType_t full, uint8_t row) {
   const TickType_t held = dogHeldTicks(front);
   if (held < DOG_HOLD_START) {
     return false;
@@ -192,12 +196,13 @@ bool dogDrawHold(const char *text, bool front, TickType_t full) {
   if (filled > OLED_WIDTH) {
     filled = OLED_WIDTH;
   }
-  dogSmallCentre(0, OLED_WIDTH - 1, text);
+  OLED::drawFilledRect(0, fieldTop(row), OLED_WIDTH - 1, row + 7, true); // the bar takes the whole row
+  dogSmallCentre(0, OLED_WIDTH - 1, text, textBase(row));
   if (filled) {
     if (front == frontOnRight()) {
-      OLED::invertRect(OLED_WIDTH - filled, 23, OLED_WIDTH - 1, 31);
+      OLED::invertRect(OLED_WIDTH - filled, fieldTop(row), OLED_WIDTH - 1, row + 7);
     } else {
-      OLED::invertRect(0, 23, filled - 1, 31);
+      OLED::invertRect(0, fieldTop(row), filled - 1, row + 7);
     }
   }
   return true;

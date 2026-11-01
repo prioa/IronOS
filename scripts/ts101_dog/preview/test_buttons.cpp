@@ -21,6 +21,7 @@ static uint8_t frame[FRAMEBUFFER_START + OLED_WIDTH * OLED_HEIGHT / 8];
 OperatingMode  mode = OperatingMode::HomeScreen;
 guiContext     cxt;
 static int     failures = 0;
+static bool    animated = false; // a screen transition was asked for since the last check
 
 static const char *name(OperatingMode m) {
   switch (m) {
@@ -57,6 +58,7 @@ static void step(bool front, bool rear, uint32_t ms = 30) {
       memset(&cxt.scratch_state, 0, sizeof(cxt.scratch_state));
       mode = next;
     }
+    animated |= cxt.transitionMode != TransitionAnimation::None;
     cxt.transitionMode = TransitionAnimation::None;
   }
 }
@@ -166,6 +168,11 @@ int main() {
   puts("== Menü: hinten immer zurück, vorne blättern, vorne halten öffnet");
   click(false);
   expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü");
+  animated = false;
+  click(true);
+  expect(!animated, "Klick vorne im Menü: nur die Markierung wandert, keine Bildschirm-Animation");
+  click(false);
+  click(false);
   click(true);
   hold(true, 800);
   expectMode(OperatingMode::DebugMenuReadout, "Klick vorne zu Info, Halten vorne öffnet die Info-Seiten");
@@ -190,7 +197,9 @@ int main() {
   click(true);
   click(true);
   click(true);
+  animated = false;
   hold(true, 800); // Schlaf
+  expect(animated, "Öffnen eines Bereichs schiebt weiterhin");
   click(true);
   const uint16_t sleepBefore = getSettingValue(SettingsOptions::SleepTime);
   click(true);

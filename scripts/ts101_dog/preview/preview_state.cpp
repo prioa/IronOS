@@ -145,6 +145,7 @@ std::vector<PreviewScene> previewScenes() {
   return {
       // Step 3: home, sleep, info, interruptions
       {"s1_start", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(26); }},
+      {"s7_start_100h", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; settings[SettingsOptions::TotalSolderMinutes] = 123 * 60 + 4; ui_draw_homescreen_simplified(26); settings[SettingsOptions::TotalSolderMinutes] = 42 * 60 + 17; }},
       {"s2_heiss", 6000000 + 3500, 180, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(180); }},
       {"s3_schwach", 6000000 + 3000, 26, 320, 0, 90, false, [] { limitX10 = 180; ui_draw_homescreen_simplified(26); }},
       {"s4_druck", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 100); ui_draw_homescreen_simplified(26); }},

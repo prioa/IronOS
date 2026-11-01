@@ -67,9 +67,10 @@ void       dogPressConsumed();              // the press did its job: it counts 
 void       dogSetLocked(bool locked);       // button lock: no field inverts and no bar fills
 int16_t    dogFrontKeyX();                  // the column of the key icon on the front button's side
 void       dogDrawKeys(DogKey front, DogKey rear, const char *centre);       // words and icons, inverted while pressed
-void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon); // icons only, inverted while pressed
+#define DOG_KEY_ROW 24 // the key row; the menu puts its keys in the top row (0) instead
+void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon, uint8_t row = DOG_KEY_ROW); // icons only, inverted while pressed
 // While held long enough, replaces the key row: text with a bar filling from the button's side. True if it drew
-bool       dogDrawHold(const char *text, bool front, TickType_t full);
+bool       dogDrawHold(const char *text, bool front, TickType_t full, uint8_t row = DOG_KEY_ROW);
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
 // The settings menu, drawn on its own for the preview
