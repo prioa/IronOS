@@ -4,38 +4,47 @@ Custom IronOS build for the Miniware TS101 (`TS101_DOG_UI` in `source/Core/BSP/M
 The screens live in `source/Core/Threads/UI/drawing/mono_128x32/ts101_dog_*`; they replace the dense 128x32
 soldering, sleep and simple home screens, which are compiled out with the flag set.
 
-Two buttons, five rules: the front button (tip end) acts (starts, opens, raises), the rear button (cable end) leads
-(moves on, lowers); holding the rear button leaves, on every screen; what a button does is written next to it and moves
-with it when the screen turns; a click never changes the heater; the screen shows by itself what matters.
-The screens use a 128x32 grid: stage on rows 0-22, row 23 for umlaut dots, key row on rows 24-31.
+Two buttons, one grammar: a click is one step (front forwards or +, rear on or -), holding the front button acts, holding the
+rear button leaves, on every screen. What a button does is written next to it and moves with it when the screen turns. A
+click never changes the heater; both buttons together stop at once while soldering, also when locked.
 
-- **Fonts**: Barlow Condensed SemiBold for the large digits (small degree ring, no C), Silkscreen for the small row
-  (umlaut dots set by hand), Barlow SemiBold for menu values. `make_fonts.py` turns `fonts/*.ttf` into
-  `ts101_dog_fonts.h/.cpp`; the licences are in `fonts/` (SIL OFL 1.1).
-- **Key row** (`ts101_dog_keys.cpp`): reads `getButtonA/getButtonB` directly. A pressed button inverts its field; held, the
-  row fills from that button's side with what will happen, letting go cancels. A press that did its job (a stop, a wake-up)
-  counts for nothing more until released.
-- **Home**: dog head, the total soldering time (GESAMT h:mm, only hours from 100 h on). While the tip is still hot: a warning
-  triangle, the cooling curve of the last 3 minutes (one sample every 2.5 s, dotted line at 50 C) and the tip. Key row LÖTEN | supply | MENÜ. Front click solders, rear click opens the menu, front hold opens the temperature,
-  rear hold does nothing.
-- **Soldering**: heating up, the dog runs and the curve grows in the bottom row; at temperature no dog, but set point, input
-  volts and handle temperature, a 27 px curve and the tip temperature; the bottom row changes by itself: WUFF! BEREIT,
-  session time, watts with a load bar, sleep countdown. Rear click: the second view, a 72 px curve with watts, volts and
-  calculated amps (~). Front hold: boost while held, the dog runs across. Rear hold: stop after a 1 s bar.
-- **Temperature**: front click while soldering opens it, the heater stays on. Click +/- one step (setting step size,
-  10 by default), front hold one preset further (300/350/400, `TS101_PRESETS_C`), never to the maximum; on a preset the
-  use is shown instead of the curve. Closes after 2 s or with rear hold. Clicks right after a boost are ignored
-  (upstream #1663). Changes made while soldering are saved on the home screen.
-- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels. A fixed top
-  row holds the back and next arrows next to their buttons and the title with the position (SCHLAF 2/4); below it three
-  rows, name left, value right, the picked row inverted, a scroll bar on the right edge. Moving to the next row only moves
-  the mark, the screen does not slide. The rear button always goes back, click or hold; a front click moves to the next
-  row, holding it opens a list, flips a switch (on/off settings and the unit) or makes the value in the row editable: then
-  a front click raises it (wrapping round at the top), holding it raises it faster, the rear button is done. Hold bars,
-  "saved" and the help text after 3 s use the top row. Each value saves itself when it is left.
-- **Info**: five pages (power, tip, handle and side, statistics, system), the same buttons as the menu; holding the front
-  button on System shows the raw debug values.
-- **Sleep**: the dog lies down; tip temperature, time asleep, HEBEN!. Any button wakes the iron and does nothing else.
+| Screen | Front click | Rear click | Front hold | Rear hold |
+|---|---|---|---|---|
+| Start | solder | menu | temperature | info |
+| Soldering | temperature | temperature | boost, 30 s at most | stop after 0.5 s |
+| Temperature | +5° | -5° | next preset | done |
+| Menu list | open or change | next row | nothing | back |
+| Value | + | - | + faster | done |
+| Info | next page | previous page | on System: debug | back |
+| Sleep | wake | wake | wake | heater off, to Start |
+
+The screens follow the "TS101 Gegenentwürfe" boards on a 128x32 grid; `preview/extract_gegenentwuerfe.py` unpacks those boards
+into reference images for `preview/compare.py`.
+
+- **Fonts**: Barlow Condensed SemiBold for the large digits (rows 0-19, small degree ring), the IronOS 6x8 font for the small row
+  and the menu, `fonts/label8x10.txt` for the mixed-case labels ("Bleifrei", "Löten"): taken from the boards, with the letters
+  they have no sample of drawn in the same style. Barlow SemiBold for the words on full screen notices. `make_fonts.py` turns
+  them into `ts101_dog_fonts.h/.cpp`; the licences are in `fonts/` (SIL OFL 1.1).
+- **Start**: the preset's name (or "Soll"), the supply (`PD 20V·65W`, marked with ! when weak), the set point, `Menü` and `Löten`
+  next to their buttons. The menu switch `START MIT HUND` picks the variant with the dog head, which also runs and barks when the
+  iron is picked up. While the tip is still hot: a warning triangle, the cooling curve down to a dotted 50 C and the tip.
+  The lifetime soldering time is on the Info statistics page.
+- **Lock**: holding both buttons on Start switches it on or off for the sessions that follow, with a notice, as long as `SPERRE`
+  in the menu isn't off; that entry also sets what it locks. To unlock: both buttons stop, then the same gesture on Start.
+- **Soldering**: heating up, the running dog with the power bar; with a weak supply no dog, the set point, a flat curve and an
+  inverted row `Netzteil 9V·13W`. At temperature: check mark and `Bereit`, or `Soll 350` under load, the curve below the set line,
+  the power bar. Reaching the set point inverts the screen for 200 ms. `SCHLAF IN n` takes the top line before sleep.
+  Holding the rear button shows a block `Halten: Stopp` with a line filling from the rear side.
+- **Detail view** (menu switch `DETAILANSICHT`): source and volts, calculated watts and amps (~), handle, session time.
+- **Boost**: inverted `BOOST`, the target and the seconds left, no dog. It ends after 30 s and needs a fresh press to start again.
+- **Temperature**: `Soll`, the set point, the preset's use, a scale from 100 to 400 C. Closes after 2 s or with rear hold. Clicks right
+  after a boost are ignored (upstream #1663). Changes made while soldering are saved on the home screen.
+- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels. Top row: next-row
+  arrow, title with position (SCHLAF 2/4), OK; below it three rows. A value being changed shows -, a bar with the time left and +;
+  it saves itself after 4.5 s without a button. Help text after 3 s uses the top row.
+- **Info**: five pages (power, tip, handle and side, statistics, system); holding the front button on System shows the raw values.
+- **Sleep**: the dog lies down; tip temperature, `AUS 7:19` until the heater goes off (empty if auto-off is disabled). Only letting go
+  of the rear button wakes the iron, so a hold can finish as a stop even if the iron moves meanwhile.
 - **Interruptions**: full screen with what is wrong and what it means: no tip, undervoltage, thermal runaway, handle too hot
   (`DOG_HANDLE_LIMIT_X10C`, 70 C for 2 s: the heater stops, and the iron won't start until the handle is cooler; the handle
   NTC table is extended up to 100 C for this), button lock.
