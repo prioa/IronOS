@@ -6,6 +6,41 @@
 
 bool showExitMenuTransition = false;
 
+#ifdef TS101_DOG_UI
+static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext *cxt) {
+  if (dogAlert != DogAlert::None) {
+    // An alert stays until it is safe again and a button says it was read; the iron can't start before that
+    if (buttons != BUTTON_NONE && (dogAlert != DogAlert::Handle || getHandleTemperature(0) < DOG_HANDLE_LIMIT_X10C)) {
+      dogAlert = DogAlert::None;
+    }
+    return OperatingMode::HomeScreen;
+  }
+  if (dogHoldDone(true, DOG_HOLD_FULL)) {
+    dogPressConsumed();
+    cxt->transitionMode = TransitionAnimation::Left;
+    return OperatingMode::TemperatureAdjust;
+  }
+  switch (buttons) {
+  case BUTTON_F_SHORT:
+    if (!isTipDisconnected()) {
+      if (getHandleTemperature(0) >= DOG_HANDLE_LIMIT_X10C) {
+        dogAlert = DogAlert::Handle;
+        break;
+      }
+      cxt->transitionMode = TransitionAnimation::Left;
+      return OperatingMode::Soldering;
+    }
+    break;
+  case BUTTON_B_SHORT:
+    cxt->transitionMode = TransitionAnimation::Right;
+    return OperatingMode::SettingsMenu;
+  default:
+    break; // holding the rear button does nothing here: there is nowhere further out
+  }
+  return OperatingMode::HomeScreen;
+}
+#endif
+
 OperatingMode handleHomeButtons(const ButtonState buttons, guiContext *cxt) {
   if (buttons != BUTTON_NONE && cxt->scratch_state.state1 == 0) {
     return OperatingMode::HomeScreen; // Ignore button press
@@ -68,10 +103,16 @@ OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
   } else {
     OLED::setCursor(-1, 0);
   }
+#ifdef TS101_DOG_UI
+  dogSetLocked(false);
+  ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
+  return handleDogHomeButtons(buttons, cxt);
+#else
   if (getSettingValue(SettingsOptions::DetailedIDLE)) {
     ui_draw_homescreen_detailed(tipTemp);
   } else {
     ui_draw_homescreen_simplified(tipTemp);
   }
   return handleHomeButtons(buttons, cxt);
+#endif
 }

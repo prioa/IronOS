@@ -10,6 +10,7 @@
 #include "TipThermoModel.h"
 #include "power.hpp"
 #include "ui_drawing.hpp"
+#include "../../../../../version.h"
 
 extern TickType_t lastMovementTime;
 
@@ -327,7 +328,7 @@ void dogDrawTemperatureView(bool heating) {
 
 /*
  * Sleep: the dog lies there awake for a moment, closes its eyes and "z Z Z" drifts up from its head;
- * on the right the tip temperature, input voltage and how long it has been asleep
+ * on the right the tip temperature, how long it has been asleep and what wakes it
  */
 static void drawSleepingDog() {
   const TickType_t inSleep = xTaskGetTickCount() - dogSleepEnterTime;
@@ -341,17 +342,16 @@ static void drawSleepingDog() {
 }
 
 static void drawSleepScreen(TemperatureType_t tipTemp) {
-  const int16_t x = 85;
   OLED::clearScreen();
   drawSleepingDog();
-  OLED::setCursor(x + 2, 0);
-  OLED::printNumber(tipTemp, 3, FontStyle::SMALL);
-  OLED::printSymbolDeg(FontStyle::SMALL);
-  OLED::drawArea(x, 16, 8, 8, iconBolt);
-  OLED::setCursor(x + 9, 16);
-  dogPrintVoltage();
+  char text[12];
+  dogFormat(text, tipTemp);
+  dogText(dogFontMid, OLED_WIDTH - 1 - dogTextWidth(dogFontMid, text) - 6, 16, text);
+  OLED::drawArea(OLED_WIDTH - 5, 0, 5, 8, dogRing);
   uint32_t seconds = (xTaskGetTickCount() - dogSleepEnterTime) / TICKS_SECOND;
-  dogPrintTime(x, 24, dogClock, seconds / 60, seconds % 60);
+  dogFormatTime(text, seconds / 60, seconds % 60);
+  dogSmallRight(OLED_WIDTH - 1, text, 23);
+  dogSmallRight(OLED_WIDTH - 1, DOG_T("HEBEN!", "LIFT!"));
   OLED::refresh();
 }
 
@@ -359,84 +359,26 @@ void ui_draw_soldering_detailed_sleep(TemperatureType_t tipTemp) { drawSleepScre
 void ui_draw_soldering_basic_sleep(TemperatureType_t tipTemp) { drawSleepScreen(tipTemp); }
 
 /*
- * Home:
- *   [     [thermo] 320°C     ][ dog ]  <- set point; while still hot the tip temperature with a down arrow
- *   [▶] item, every 3 s  [⚙] [ head]  <- play next to its button, gear next to the head
- * Picking the iron up after it lay still makes the dog run across and bark; without a tip a full screen notice.
+ * Home, the iron is not heating; the power supply is always in the key row because it decides how hard the iron can heat
+ *   [ head ]     ZIEL 320°                  <- set point; while still hot HEISS, the tip temperature and a small arrow
+ *   [=] MENÜ     20V 90W      LÖTEN [>]
+ * Picking the iron up after it lay still makes the dog run across and bark; alerts replace everything else.
  */
-#define HOME_STATUS_ITEMS 8
-
-static void printTinyX10(uint32_t x10, const char *unit) {
-  OLED::printNumber(x10 / 10, digitCount(x10 / 10), FontStyle::TINY);
-  OLED::print(SmallSymbolDot, FontStyle::TINY);
-  OLED::printNumber(x10 % 10, 1, FontStyle::TINY);
-  OLED::print(unit, FontStyle::TINY);
+static const char *alertFooter(char *text) {
+  switch (dogAlert) {
+  case DogAlert::Handle: {
+    char *end = dogFormat(text, getHandleTemperature(0) / 10);
+    strcpy(end, DOG_T("°: HEIZUNG AUS", "°: HEATER OFF"));
+    return text;
+  }
+  default:
+    return DOG_T("AUS: SPITZE PRÜFEN", "OFF: CHECK THE TIP");
+  }
 }
 
-static void drawStatusItem(int16_t x, uint8_t w, uint8_t item) {
-  const char *hint = "+LÖTEN -MENÜ";
-  uint8_t     width;
-  switch (item) {
-  case 0:
-    dogPrintLabel(x + (w - dogLabelWidth(hint)) / 2, 24, hint);
-    break;
-  case 1: { // input voltage
-    uint32_t volts = getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0);
-    width          = 9 + (digitCount(volts / 10) + 3) * 6;
-    OLED::drawArea(x + (w - width) / 2, 24, 8, 8, iconBolt);
-    OLED::setCursor(x + (w - width) / 2 + 9, 24);
-    printTinyX10(volts, SmallSymbolVolts);
-    break;
-  }
-  case 2: { // lifetime soldering time, h:mm
-    uint16_t minutes = getSettingValue(SettingsOptions::TotalSolderMinutes);
-    width            = 9 + (digitCount(minutes / 60) + 3) * 6;
-    dogPrintTotalTime(x + (w - width) / 2, 24);
-    break;
-  }
-  case 3: { // last session, m:ss
-    uint32_t m = dogLastSessionSeconds / 60;
-    width      = 9 + (digitCount(m) + 3) * 6;
-    dogPrintTime(x + (w - width) / 2, 24, dogClock, m, dogLastSessionSeconds % 60);
-    break;
-  }
-  case 4: { // power limit
-    int32_t  limit = getX10WattageLimits();
-    uint16_t watts = limit > 0 ? limit / 10 : 0;
-    width          = (3 + digitCount(watts) + 1) * 6;
-    OLED::setCursor(x + (w - width) / 2, 24);
-    OLED::print(SmallSymbolMax, FontStyle::TINY);
-    OLED::printNumber(watts, digitCount(watts), FontStyle::TINY);
-    OLED::print(SmallSymbolWatts, FontStyle::TINY);
-    break;
-  }
-  case 5: { // handle temperature
-    uint16_t handle = getHandleTemperature(0) / 10;
-    width           = 9 + (digitCount(handle) + 1) * 6;
-    OLED::drawArea(x + (w - width) / 2, 24, 8, 8, iconThermo8);
-    OLED::setCursor(x + (w - width) / 2 + 9, 24);
-    OLED::printNumber(handle, digitCount(handle), FontStyle::TINY);
-    OLED::print(SmallSymbolDegreeSign, FontStyle::TINY);
-    break;
-  }
-  case 6: { // tip resistance
-    uint8_t ohmsX10 = getTipResistanceX10();
-    width           = (digitCount(ohmsX10 / 10) + 3) * 6;
-    OLED::setCursor(x + (w - width) / 2, 24);
-    printTinyX10(ohmsX10, SmallSymbolOhm);
-    break;
-  }
-  default: { // firmware version
-    width = 9 + strlen(SmallSymbolVersionNumber) * 6;
-    if (width > w) {
-      width = w;
-    }
-    OLED::drawArea(x + (w - width) / 2, 24, 8, 8, iconPaw);
-    OLED::setCursor(x + (w - width) / 2 + 9, 24);
-    OLED::print(SmallSymbolVersionNumber, FontStyle::TINY, (w - 9) / 6);
-    break;
-  }
-  }
+static void drawHeadClipped(int16_t x, const uint8_t *sprite) {
+  dogBlit(x, 0, DOG_HEAD_WIDTH, 24, sprite);
+  OLED::drawFilledRect(x, 23, x + DOG_HEAD_WIDTH - 1, 23, true);
 }
 
 void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
@@ -447,7 +389,12 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
   const TickType_t  now              = xTaskGetTickCount();
 
   if (isTipDisconnected()) {
-    dogDrawNotice(iconWarning, "SPITZE", "FEHLT!", nullptr);
+    dogDrawNotice(iconWarning, DOG_T("SPITZE!", "NO TIP!"), DOG_T("KEINE SPITZE ERKANNT", "CONNECT A TIP"));
+    return;
+  }
+  if (dogAlert != DogAlert::None) {
+    char text[20];
+    dogDrawNotice(iconWarning, dogAlert == DogAlert::Handle ? DOG_T("GRIFF!", "GRIP!") : DOG_T("HEIZUNG!", "HEATER!"), alertFooter(text));
     return;
   }
   if (lastMovementTime != lastSeenMovement) {
@@ -462,9 +409,10 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
   const bool       running     = pickedUpAt && sincePickup < TICKS_SECOND;
   if (running) {
     dogDrawRunAcross();
+    OLED::drawFilledRect(0, 23, OLED_WIDTH - 1, 23, true);
   } else {
-    bool bark = pickedUpAt && sincePickup < TICKS_SECOND * 2 && ((now / (TICKS_100MS * 3)) % 2);
-    OLED::drawArea(flip ? 0 : OLED_WIDTH - DOG_HEAD_WIDTH, 0, DOG_HEAD_WIDTH, DOG_HEAD_HEIGHT, bark ? dogHeadBark : dogHead);
+    const bool bark = pickedUpAt && sincePickup < TICKS_SECOND * 2 && ((now / (TICKS_100MS * 3)) % 2);
+    drawHeadClipped(flip ? 0 : OLED_WIDTH - DOG_HEAD_WIDTH, bark ? dogHeadBark : dogHead);
   }
 
   // Big value: the set point, or the tip temperature while it is still hot
@@ -473,31 +421,110 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
   } else if (tipTemp < 45) {
     tempOnDisplay = false;
   }
-  const int16_t areaX  = flip ? DOG_HEAD_WIDTH : 0; // the part of the screen next to the head
-  const uint8_t areaW  = OLED_WIDTH - DOG_HEAD_WIDTH;
-  const int16_t valueX = areaX + (areaW - 58) / 2;
-  if (running) {
-    // The dog has the upper part of the screen to itself
-  } else if (tempOnDisplay) {
-    if (!(getSettingValue(SettingsOptions::CoolingTempBlink) && (now % 1000 < 300))) {
-      OLED::drawArea(valueX + 2, 8, 8, 8, iconArrowDown8); // cooling down
-      OLED::setCursor(valueX + 10, 0);
-      ui_draw_tip_temperature(true, FontStyle::LARGE);
+  const char    *word  = tempOnDisplay ? DOG_T("HEISS", "HOT") : DOG_T("ZIEL", "SET");
+  const uint16_t value = tempOnDisplay ? tipTemp : getSettingValue(SettingsOptions::SolderingTemp);
+  const uint8_t  wordW = dogTextWidth(dogFontSmall, word);
+  const int16_t  areaX = flip ? DOG_HEAD_WIDTH : 0;
+  const uint8_t  areaW = OLED_WIDTH - DOG_HEAD_WIDTH;
+  const int16_t  x     = areaX + (areaW - (wordW + 3 + TEMP_WIDTH)) / 2;
+  if (!running && !(tempOnDisplay && getSettingValue(SettingsOptions::CoolingTempBlink) && (now % 1000 < 300))) {
+    dogSmall(x, word, 15);
+    dogBig(x + wordW + 3, value);
+    if (tempOnDisplay) {
+      dogBlit(x + (wordW - 8) / 2, 16, 8, 8, iconArrowDown8);
+      OLED::drawFilledRect(x + (wordW - 8) / 2, 23, x + (wordW - 8) / 2 + 7, 23, true);
     }
-  } else {
-    OLED::drawArea(valueX, 8, 8, 16, iconThermo16);
-    OLED::setCursor(valueX + 10, 0);
-    OLED::printNumber(getSettingValue(SettingsOptions::SolderingTemp), 3, FontStyle::LARGE);
-    OLED::printSymbolDeg(FontStyle::EXTRAS);
   }
 
-  // Status bar: the start hint next to the front button, the settings hint next to the head
-  OLED::drawArea(flip ? OLED_WIDTH - 8 : 0, 24, 8, 8, iconPlay8);
-  OLED::drawArea(flip ? DOG_HEAD_WIDTH + 1 : OLED_WIDTH - DOG_HEAD_WIDTH - 9, 24, 8, 8, iconGear8);
-  if (tempOnDisplay) {
-    dogPrintLabel(areaX + (areaW - dogLabelWidth("HEISS!")) / 2, 24, "HEISS!");
+  // Key row, with the supply in the middle: "20V 90W", marked when it is weak
+  if (dogDrawHold(DOG_T("HALTEN: TEMPERATUR", "HOLD: TEMPERATURE"), true, DOG_HOLD_FULL)) {
+    return;
+  }
+  char           supply[12];
+  const int32_t  limit = getX10WattageLimits();
+  char          *end   = dogFormat(supply, (getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0) + 5) / 10);
+  *end++               = 'V';
+  *end++               = ' ';
+  end                  = dogFormat(end, limit > 0 ? limit / 10 : 0);
+  *end++               = 'W';
+  *end++               = (limit > 0 && limit <= DOG_WEAK_SUPPLY_X10W) ? '!' : 0;
+  *end                 = 0;
+  dogDrawKeys({iconPlay8, DOG_T("LÖTEN", "SOLDER")}, {iconMenu, DOG_T("MENÜ", "MENU")}, supply);
+}
+
+/*
+ * The info pages: a heading with the page number, two lines of label and value, and the key row
+ */
+void dogDrawInfoPage(uint8_t page) {
+  static const char *const titles[DOG_INFO_PAGES][2] = {{"STROM", "POWER"}, {"SPITZE", "TIP"}, {"GRIFF + LAGE", "GRIP + SIDE"}, {"STATISTIK", "STATISTICS"}, {"SYSTEM", "SYSTEM"}};
+  char                     left[14], right[14];
+  const char              *label1 = "", *label2 = "";
+  const char              *value1 = right, *value2 = left;
+  switch (page) {
+  case 0: {
+    const int8_t source = getPowerSourceNumber();
+    label1              = source == 0 ? "DC" : (source == 1 ? "USB" : "USB-PD");
+    label2              = DOG_T("GRENZE", "LIMIT");
+    formatX10(right, getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0), 'V');
+    const int32_t limit = getX10WattageLimits();
+    formatUnit(left, limit > 0 ? limit / 10 : 0, "W");
+    break;
+  }
+  case 1: {
+    label1 = DOG_T("TYP", "TYPE");
+    label2 = DOG_T("WIDERSTAND", "RESISTANCE");
+    value1 = "AUTO";
+    char *end = dogFormat(left, getTipResistanceX10() / 10);
+    *end++    = '.';
+    *end++    = '0' + getTipResistanceX10() % 10;
+    strcpy(end, " OHM");
+    break;
+  }
+  case 2: {
+    label1 = DOG_T("GRIFF", "GRIP");
+    label2 = DOG_T("LAGE", "SIDE");
+    const uint32_t handle = getHandleTemperature(0);
+    char *end = dogFormat(right, handle / 10);
+    *end++    = '.';
+    *end++    = '0' + handle % 10;
+    strcpy(end, "°");
+    value2 = OLED::getRotation() ? DOG_T("RECHTS", "RIGHT") : DOG_T("LINKS", "LEFT");
+    break;
+  }
+  case 3: {
+    label1 = DOG_T("GESAMT", "TOTAL");
+    label2 = DOG_T("LETZTE", "LAST");
+    const uint16_t minutes = getSettingValue(SettingsOptions::TotalSolderMinutes);
+    char *end = dogFormatTime(right, minutes / 60, minutes % 60);
+    strcpy(end, " H");
+    dogFormatTime(left, dogLastSessionSeconds / 60, dogLastSessionSeconds % 60);
+    break;
+  }
+  default:
+    label1 = "VERSION";
+    label2 = "DEBUG";
+    value1 = BUILD_VERSION + 1; // without the v
+    value2 = "";
+    break;
+  }
+  dogSmall(0, titles[page][dogLangDE() ? 0 : 1], 7);
+  char number[6];
+  char *end = dogFormat(number, page + 1);
+  *end++    = '/';
+  dogFormat(end, DOG_INFO_PAGES);
+  dogSmallRight(OLED_WIDTH - 1, number, 7);
+  dogSmall(0, label1, 15);
+  dogSmallRight(OLED_WIDTH - 1, value1, 15);
+  dogSmall(0, label2, 23);
+  dogSmallRight(OLED_WIDTH - 1, value2, 23);
+  if (dogDrawHold(DOG_T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL)) {
+    return;
+  }
+  const DogKey next = {iconMenu, DOG_T("WEITER", "NEXT")};
+  if (page == DOG_INFO_PAGES - 1) {
+    dogDrawKeys({iconNext, DOG_T("ÖFFNEN", "OPEN")}, next, nullptr);
   } else {
-    drawStatusItem(areaX + 9, areaW - 18, (now / (TICKS_SECOND * 3)) % HOME_STATUS_ITEMS);
+    dogDrawKeys({nullptr, nullptr}, next, nullptr);
   }
 }
 #endif

@@ -17,23 +17,21 @@ extern uint32_t   dogLastSessionSeconds; // length of the last soldering session
 
 void dogDrawWuff(int16_t x, int8_t y);                  // y must be on a page boundary
 void dogDrawRunning(int16_t x, int8_t y);               // running dog, any position; clipped at the screen edge
-void dogDrawRunAcross();                                // the dog runs across the top 24 rows of the whole screen
+void dogDrawRunAcross();                                // the dog runs across the stage of the whole screen
 void dogDrawFlame(int16_t x);                           // blinking flame in the top row, marks soldering mode
-void dogPrintTime(int16_t x, int8_t y, const uint8_t *icon, uint16_t major, uint8_t minor); // [icon]major:minor, 6x8 font
-void dogPrintSessionTime(int16_t x, int8_t y); // stopwatch icon + m:ss of this session (h:mm after 100 minutes)
-void dogPrintTotalTime(int16_t x, int8_t y);   // sum icon + h:mm soldered over the lifetime of the iron
-void dogPrintVoltage();                        // input voltage 20.1V at the cursor, 6x8 font
-
-// Upper case 5x7 label font (A-Z, ÄÖÜ, digits, . : - / ! + % °), UTF-8 strings, 6 px per character
-uint8_t dogLabelWidth(const char *text);
-void    dogPrintLabel(int16_t x, int8_t y, const char *text); // y must be on a page boundary
-uint8_t dogLabelBigWidth(const char *text);
-void    dogPrintLabelBig(int16_t x, int8_t y, const char *text); // label font doubled to 10x14, any y
+char *dogFormatTime(char *out, uint16_t major, uint8_t minor); // major:mm
 
 // OR a sprite (page format, height a multiple of 8) onto the screen at any position, keeping what is under it
 void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *data);
-// Full screen notice: 24x24 icon on the left, one or two big lines, optional footer row under a rule
-void dogDrawNotice(const uint8_t *icon, const char *line1, const char *line2, const char *footer);
+// Full screen notice: 24x24 icon on the left, big word, below it what it means
+void dogDrawNotice(const uint8_t *icon, const char *word, const char *footer);
+// Lock notices with the same look as warnUser: true when they should end
+bool dogWarnLocked(bool locked, ButtonState buttons);
+
+// Something stopped the heater and the home screen has to say why, until a button is pressed and it is safe again
+enum class DogAlert : uint8_t { None, Handle, Thermal };
+extern DogAlert dogAlert;
+bool dogHandleTooHot(); // above DOG_HANDLE_LIMIT_X10C for long enough not to be a glitch
 
 // Called on the home screen: ends the soldering session and saves the lifetime soldering time
 void dogSessionEnded();
@@ -73,6 +71,10 @@ void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon); //
 // While held long enough, replaces the key row: text with a bar filling from the button's side. True if it drew
 bool       dogDrawHold(const char *text, bool front, TickType_t full);
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
+
+// The info pages (menu -> info); page 4 leads on to the raw debug values
+#define DOG_INFO_PAGES 5
+void dogDrawInfoPage(uint8_t page);
 
 // ---- Temperature view: changes the set point; while soldering it lives inside the soldering mode, so the heater and every safety check keep running ----
 void dogAdjustOpened();                         // restarts the view for a fresh press

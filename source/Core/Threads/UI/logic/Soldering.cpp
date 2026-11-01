@@ -59,11 +59,11 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
   case BUTTON_BOTH_LONG:
     if (getSettingValue(SettingsOptions::LockingMode)) {
       if (cxt->scratch_state.state1 == 0) {
-        if (warnUser(translatedString(Tr->LockingKeysString), buttons)) {
+        if (dogWarnLocked(true, buttons)) {
           cxt->scratch_state.state1 = 2;
         }
       } else {
-        warnUser(translatedString(Tr->UnlockingKeysString), buttons);
+        dogWarnLocked(false, buttons);
       }
     }
     break;
@@ -74,18 +74,28 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
 }
 #endif
 
+#ifdef TS101_DOG_UI
+#define DOG_WARN_UNLOCKING(buttons) dogWarnLocked(false, buttons)
+#define DOG_WARN_LOCKING(buttons)   dogWarnLocked(true, buttons)
+#define DOG_WARN_LOCKED(buttons)    dogWarnLocked(true, buttons)
+#else
+#define DOG_WARN_UNLOCKING(buttons) warnUser(translatedString(Tr->UnlockingKeysString), buttons)
+#define DOG_WARN_LOCKING(buttons)   warnUser(translatedString(Tr->LockingKeysString), buttons)
+#define DOG_WARN_LOCKED(buttons)    warnUser(translatedString(Tr->WarningKeysLockedString), buttons)
+#endif
+
 OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt) {
   if (cxt->scratch_state.state1 >= 2) {
     // Buttons are currently locked
     if (buttons == BUTTON_BOTH_LONG) {
       if (cxt->scratch_state.state1 == 3) {
         // Unlocking
-        if (warnUser(translatedString(Tr->UnlockingKeysString), buttons)) {
+        if (DOG_WARN_UNLOCKING(buttons)) {
           cxt->scratch_state.state1 = 1;
           cxt->scratch_state.state7 = 0;
         }
       } else {
-        warnUser(translatedString(Tr->LockingKeysString), buttons);
+        DOG_WARN_LOCKING(buttons);
       }
       return OperatingMode::Soldering;
     }
@@ -94,7 +104,7 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
       if (xTaskGetTickCount() >= cxt->scratch_state.state7) {
         cxt->scratch_state.state7 = 0;
       } else {
-        warnUser(translatedString(Tr->WarningKeysLockedString), buttons);
+        DOG_WARN_LOCKED(buttons);
         return OperatingMode::Soldering;
       }
     }
@@ -111,7 +121,7 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
     /*Fall through*/
     default: // Set timer for and display a lock warning
       cxt->scratch_state.state7 = xTaskGetTickCount() + TICKS_SECOND;
-      warnUser(translatedString(Tr->WarningKeysLockedString), buttons);
+      DOG_WARN_LOCKED(buttons);
       break;
     }
     return OperatingMode::Soldering;
@@ -265,6 +275,14 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
     return OperatingMode::HomeScreen;
   }
 #endif
+#ifdef TS101_DOG_UI
+  if (dogHandleTooHot()) {
+    currentTempTargetDegC = 0; // heater control off; the home screen says why
+    dogAlert              = DogAlert::Handle;
+    cxt->transitionMode   = TransitionAnimation::Right;
+    return OperatingMode::HomeScreen;
+  }
+#endif
   if (shouldBeSleeping()) {
     return OperatingMode::Sleeping;
   }
@@ -272,6 +290,9 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
   if (heaterThermalRunawayCounter > 8) {
     currentTempTargetDegC       = 0; // heater control off
     heaterThermalRunawayCounter = 0;
+#ifdef TS101_DOG_UI
+    dogAlert = DogAlert::Thermal;
+#endif
     cxt->transitionMode         = TransitionAnimation::Right;
     return OperatingMode::ThermalRunaway;
   }

@@ -5,7 +5,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/../../../source"
 OUT="${1:-$HERE/out}"
 mkdir -p "$OUT"
-FLAGS=(-std=c++17 -O0 -w -DMODEL_TS101 -include "$HERE/stubs/host_prelude.h" -I"$HERE" -I"$HERE/stubs" -I"$SRC/Core/BSP" -I"$SRC/Core/BSP/Miniware" -I"$SRC/Core/Drivers"
+FLAGS=(-std=c++17 -O0 -w -DMODEL_TS101 -include "$HERE/stubs/host_prelude.h" -I"$HERE" -I"$HERE/stubs" -I"$SRC" -I"$SRC/Core/BSP" -I"$SRC/Core/BSP/Miniware" -I"$SRC/Core/Drivers"
   -I"$SRC/Core/Drivers/usb-pd/include" -I"$SRC/Core/Inc" -I"$SRC/Core/Threads" -I"$SRC/Core/Threads/UI/drawing" -I"$SRC/Core/Threads/UI/drawing/mono_128x32"
   -I"$SRC/Core/Threads/UI/logic" -I"$SRC/Core/Threads/UI/logic/utils")
 UI="$SRC/Core/Threads/UI/drawing/mono_128x32"

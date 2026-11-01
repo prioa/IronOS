@@ -28,88 +28,13 @@ void dogDrawFlame(int16_t x) {
   }
 }
 
-void dogPrintTime(int16_t x, int8_t y, const uint8_t *icon, uint16_t major, uint8_t minor) {
-  if (icon) {
-    OLED::drawArea(x, y, 8, 8, icon);
-    x += 9;
-  }
-  OLED::setCursor(x, y);
-  OLED::printNumber(major, major >= 100 ? 3 : (major >= 10 ? 2 : 1), FontStyle::TINY);
-  OLED::print(SmallSymbolColon, FontStyle::TINY);
-  OLED::printNumber(minor, 2, FontStyle::TINY, false);
-}
-
-void dogPrintSessionTime(int16_t x, int8_t y) {
-  uint32_t seconds = dogSolderTimerStart ? (xTaskGetTickCount() - dogSolderTimerStart) / TICKS_SECOND : 0;
-  uint32_t minutes = seconds / 60;
-  if (minutes < 100) {
-    dogPrintTime(x, y, dogClock, minutes, seconds % 60);
-  } else {
-    dogPrintTime(x, y, dogClock, minutes / 60, minutes % 60);
-  }
-}
-
-void dogPrintTotalTime(int16_t x, int8_t y) {
-  uint16_t minutes = getSettingValue(SettingsOptions::TotalSolderMinutes);
-  dogPrintTime(x, y, dogSigma, minutes / 60, minutes % 60);
-}
-
-void dogPrintVoltage() {
-  uint32_t voltX10 = getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0);
-  OLED::printNumber(voltX10 / 10, 2, FontStyle::TINY);
-  OLED::print(SmallSymbolDot, FontStyle::TINY);
-  OLED::printNumber(voltX10 % 10, 1, FontStyle::TINY);
-  OLED::print(SmallSymbolVolts, FontStyle::TINY);
-}
-
-static const uint8_t *labelGlyph(const char *text, uint8_t *bytes) {
-  for (uint8_t g = 0; g < DOG_LABEL_GLYPHS; g++) {
-    const char *c   = dogLabelChars[g];
-    uint8_t     len = c[1] ? 2 : 1;
-    if (text[0] == c[0] && (len == 1 || text[1] == c[1])) {
-      *bytes = len;
-      return &dogLabelFont[g * 5];
-    }
-  }
-  *bytes = (text[0] & 0x80) ? 2 : 1; // unknown: skip it (two bytes for anything non-ASCII we use)
-  return nullptr;
-}
-
-uint8_t dogLabelWidth(const char *text) {
-  uint8_t width = 0, bytes;
-  for (; *text; text += bytes) {
-    labelGlyph(text, &bytes);
-    width += 6;
-  }
-  return width ? width - 1 : 0;
-}
-
-void dogPrintLabel(int16_t x, int8_t y, const char *text) {
-  uint8_t bytes;
-  for (; *text; text += bytes) {
-    const uint8_t *glyph = labelGlyph(text, &bytes);
-    if (glyph) {
-      OLED::drawArea(x, y, 5, 8, glyph);
-    }
-    x += 6;
-  }
-}
-
-uint8_t dogLabelBigWidth(const char *text) { return dogLabelWidth(text) * 2; }
-
-void dogPrintLabelBig(int16_t x, int8_t y, const char *text) {
-  uint8_t bytes;
-  for (; *text; text += bytes) {
-    const uint8_t *glyph = labelGlyph(text, &bytes);
-    for (uint8_t col = 0; glyph && col < 5; col++) {
-      for (uint8_t row = 0; row < 7; row++) {
-        if ((glyph[col] >> row) & 1) {
-          OLED::drawFilledRect(x + col * 2, y + row * 2, x + col * 2 + 1, y + row * 2 + 1, false);
-        }
-      }
-    }
-    x += 12;
-  }
+char *dogFormatTime(char *out, uint16_t major, uint8_t minor) {
+  out    = dogFormat(out, major);
+  *out++ = ':';
+  *out++ = '0' + minor / 10;
+  *out++ = '0' + minor % 10;
+  *out   = 0;
+  return out;
 }
 
 void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *data) {
@@ -126,22 +51,34 @@ void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *
   }
 }
 
-void dogDrawNotice(const uint8_t *icon, const char *line1, const char *line2, const char *footer) {
+void dogDrawNotice(const uint8_t *icon, const char *word, const char *footer) {
   OLED::clearScreen();
-  const uint8_t textH = line2 ? 30 : 14;
-  const uint8_t areaH = footer ? 23 : 32;
-  const int16_t textX = 28;
-  const uint8_t textW = OLED_WIDTH - textX;
-  dogBlit(1, (areaH - 24) / 2, 24, 24, icon);
-  int8_t y = (areaH - textH) / 2;
-  dogPrintLabelBig(textX + (textW - dogLabelBigWidth(line1)) / 2, y, line1);
-  if (line2) {
-    dogPrintLabelBig(textX + (textW - dogLabelBigWidth(line2)) / 2, y + 16, line2);
+  dogBlit(1, 0, 24, 24, icon);
+  OLED::drawFilledRect(0, 23, OLED_WIDTH - 1, 23, true);
+  dogText(dogFontHead, 27 + (OLED_WIDTH - 27 - dogTextWidth(dogFontHead, word)) / 2, 20, word);
+  dogSmallCentre(0, OLED_WIDTH - 1, footer);
+}
+
+bool dogWarnLocked(bool locked, ButtonState buttons) {
+  dogDrawNotice(iconLock, locked ? DOG_T("GESPERRT", "LOCKED") : DOG_T("OFFEN", "OPEN"), locked ? DOG_T("LÖSEN: BEIDE HALTEN", "UNLOCK: HOLD BOTH") : DOG_T("TASTEN FREI", "BUTTONS FREE"));
+  if ((xTaskGetTickCount() - lastButtonTime) > TICKS_SECOND * 5) {
+    return true;
   }
-  if (footer) {
-    OLED::drawFilledRect(2, 23, OLED_WIDTH - 3, 23, false);
-    dogPrintLabel((OLED_WIDTH - dogLabelWidth(footer)) / 2, 24, footer);
+  return buttons != BUTTON_NONE;
+}
+
+DogAlert dogAlert = DogAlert::None;
+
+bool dogHandleTooHot() {
+  static TickType_t hotSince = 0;
+  if (getHandleTemperature(0) < DOG_HANDLE_LIMIT_X10C) {
+    hotSince = 0;
+    return false;
   }
+  if (!hotSince) {
+    hotSince = xTaskGetTickCount() | 1;
+  }
+  return (xTaskGetTickCount() - hotSince) >= TICKS_SECOND * 2;
 }
 
 // ---- Temperature curve ----

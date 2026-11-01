@@ -85,9 +85,6 @@ void ui_draw_homescreen_detailed(TemperatureType_t tipTemp) {
   OLED::setCursor(infoX, 24);
   OLED::print(getActiveTipChannel() ? SmallSymbolSocketTS : SmallSymbolSocketT12, FontStyle::TINY);
 #endif
-#ifdef TS101_DOG_UI
-  dogPrintTotalTime(infoX, 24);
-#endif
 }
 
 #else  /* upstream layout */

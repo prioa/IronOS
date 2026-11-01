@@ -31,7 +31,8 @@ TemperatureType_t TipThermoModel::getTipInF(bool) { return tipC * 9 / 5 + 32; }
 TemperatureType_t TipThermoModel::convertFtoC(TemperatureType_t f) { return (f - 32) * 5 / 9; }
 TemperatureType_t getTipTemp(void) { return tipC; }
 uint16_t          getInputVoltageX10(uint16_t, uint8_t) { return vX10; }
-int16_t           getHandleTemperature(uint8_t) { return 310; }
+static int16_t    handleX10 = 310;
+int16_t           getHandleTemperature(uint8_t) { return handleX10; }
 uint8_t           getTipResistanceX10() { return 62; }
 bool              isTipDisconnected() { return tipMissing; }
 bool              getIsPoweredByDCIN() { return false; }
@@ -115,6 +116,24 @@ std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 200000; // a time well away from the occasional wag
   const DogKey solderKey = {iconPlay8, "LÖTEN"}, menuKey = {iconMenu, "MENÜ"};
   return {
+      // Step 3: home, sleep, info, interruptions
+      {"s1_start", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(26); }},
+      {"s2_heiss", 6000000 + 3500, 180, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(180); }},
+      {"s3_schwach", 6000000 + 3000, 26, 320, 0, 90, false, [] { limitX10 = 180; ui_draw_homescreen_simplified(26); }},
+      {"s4_druck", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 100); ui_draw_homescreen_simplified(26); }},
+      {"s5_halten", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 150 + 270); ui_draw_homescreen_simplified(26); }},
+      {"r1_start_gedreht", 6000000 + 3000, 26, 320, 0, 201, false, [] { orient(false); limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(26); }},
+      {"z1_schlaf", 6000000 + 162000, 150, 320, 0, 201, false, [] { dogSleepEnterTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
+      {"i1_strom", T, 26, 320, 0, 201, false, [] { limitX10 = 900; dogDrawInfoPage(0); }},
+      {"i2_spitze", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(1); }},
+      {"i3_griff", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(2); }},
+      {"i4_statistik", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(3); }},
+      {"i5_system", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(4); }},
+      {"w1_spitze", T, 26, 320, 0, 201, false, [] { tipMissing = true; ui_draw_homescreen_simplified(26); }},
+      {"w2_strom", T, 26, 320, 0, 85, false, [] { dogDrawNotice(iconWarning, "STROM!", "NUR 8.5V AM EINGANG"); }},
+      {"w3_heizung", T, 26, 320, 0, 201, false, [] { dogAlert = DogAlert::Thermal; ui_draw_homescreen_simplified(26); dogAlert = DogAlert::None; }},
+      {"w4_griff", T, 26, 320, 0, 201, false, [] { handleX10 = 620; dogAlert = DogAlert::Handle; ui_draw_homescreen_simplified(26); dogAlert = DogAlert::None; handleX10 = 310; }},
+      {"w5_sperre", T, 26, 320, 0, 201, false, [] { dogWarnLocked(true, BUTTON_NONE); }},
       // Step 1: the key row (rows 23-31 are compared with the mock of the same name)
       {"k_s1_start", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
       {"k_s3_schwach", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "9V 18W!"); }},
@@ -142,8 +161,6 @@ std::vector<PreviewScene> previewScenes() {
       {"l8_stopp", T, 320, 320, 150, 201, false, [] { fillSeries(Series::Steady); atTemp(199); pressed(false, 150 + 595); ui_draw_soldering_basic_status(false); }},
       {"l9_druck_temp", T, 320, 320, 150, 201, false, [] { fillSeries(Series::Steady); atTemp(199); pressed(true, 100); ui_draw_soldering_basic_status(false); }},
       {"r2_bereit_gedreht", T, 320, 320, 150, 201, false, [] { orient(false); fillSeries(Series::Steady); atTemp(199); ui_draw_soldering_basic_status(false); }},
-      {"d1_details", T, 318, 320, 520, 201, false, [] { fillSeries(Series::Steady); atTemp(199); ui_draw_soldering_power_status(false); }},
-      {"d2_details_einbruch", T, 291, 320, 780, 201, false, [] { fillSeries(Series::Drop); atTemp(199); ui_draw_soldering_power_status(false); }},
       {"t1_temp", T, 318, 320, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
       {"t2_preset300", T, 318, 300, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
       {"t3_preset350", T, 318, 350, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
@@ -151,31 +168,5 @@ std::vector<PreviewScene> previewScenes() {
       {"t5_halten", T, 318, 320, 150, 201, false, [] { fillSeries(Series::Steady); pressed(true, 150 + 270); dogDrawTemperatureView(true); }},
       {"r3_temp_gedreht", T, 318, 350, 150, 201, false, [] { orient(false); fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
       {"s6_temp", T, 26, 320, 0, 201, false, [] { dogDrawTemperatureView(false); }},
-      {"c1_schlafen_einschlafen", T, 150, 320, 30, 201, false, [] { dogSleepEnterTime = previewTicks - 400; ui_draw_soldering_basic_sleep(150); }},
-      {"c2_schlafen", T, 150, 320, 30, 201, false, [] { dogSleepEnterTime = 0; ui_draw_soldering_basic_sleep(150); }},
-      {"c3_schlafen_detail", T, 150, 320, 30, 201, true, [] { dogSleepEnterTime = 0; ui_draw_soldering_detailed_sleep(150); }},
-      {"d10_start_hinweis", 6000000 + 1000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d11_start_spannung", 6000000 + 4000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d12_start_loetzeit", 6000000 + 7000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d13_start_zuletzt", 6000000 + 10000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d14_start_maxwatt", 6000000 + 13000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d15_start_griff", 6000000 + 16000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d16_start_widerstand", 6000000 + 19000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d17_start_version", 6000000 + 22000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = false; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d20_start_gedreht_hinweis", 7008000 + 1000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d21_start_gedreht_spannung", 7008000 + 4000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d22_start_gedreht_loetzeit", 7008000 + 7000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d23_start_gedreht_zuletzt", 7008000 + 10000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d24_start_gedreht_maxwatt", 7008000 + 13000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d25_start_gedreht_griff", 7008000 + 16000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d26_start_gedreht_widerstand", 7008000 + 19000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d27_start_gedreht_version", 7008000 + 22000, 26, 320, 0, 201, false, [] { OLED::inLeftHandedMode = true; ui_draw_homescreen_simplified(26); OLED::inLeftHandedMode = false; }},
-      {"d30_start_aufgenommen_rennt", 8000000 + 400, 26, 320, 0, 201, false, [] { lastMovementTime = 8000000; ui_draw_homescreen_simplified(26); }},
-      {"d31_start_aufgenommen_bellt", 8000000 + 1400, 26, 320, 0, 201, false, [] { ui_draw_homescreen_simplified(26); }},
-      {"d4_start_heiss", 8100000 + 1500, 180, 320, 0, 201, false, [] { ui_draw_homescreen_simplified(180); }},
-      {"d5_start_ohne_spitze", 8100000 + 1500, 26, 320, 0, 201, false, [] { tipMissing = true; ui_draw_homescreen_simplified(26); }},
-      {"d6_start_detail", T, 26, 320, 0, 201, true, [] { ui_draw_homescreen_detailed(26); }},
-      {"e1_warnung_gesperrt", T, 26, 320, 0, 201, false, [] { warnUser(translatedString(Tr->WarningKeysLockedString), BUTTON_NONE); }},
-      {"e2_warnung_entsperrt", T, 26, 320, 0, 201, false, [] { warnUser(translatedString(Tr->UnlockingKeysString), BUTTON_NONE); }},
   };
 }
