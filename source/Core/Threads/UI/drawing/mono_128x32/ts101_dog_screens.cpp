@@ -15,16 +15,8 @@ extern TickType_t lastMovementTime;
 
 // The rows of the screens on the boards: the stage on rows 0-20, the power row on 23-30, full width labels on 21-30
 static const int16_t BIG_RIGHT = 126;          // the large temperature with its ring ends here
-static const int16_t MIRROR_STAGE = 46;        // mirrored, what is left of the large temperature starts here
-static const uint8_t LABEL_ADVANCE = 8;
-static const uint8_t LABEL_BASE = 10;          // the top line in the label font, rows 0-9
-static const uint8_t KEY_LABEL_BASE = 31;      // the key words at the bottom, rows 21-30
-static const uint8_t CURVE_WIDTH = 78;
-static const uint8_t CURVE_TOP = 13, CURVE_BOTTOM = 20; // the set point is the top row
-static const uint8_t POWER_TEXT_BASE = 30;
 
 static inline bool normal() { return OLED::getRotation(); }
-static int16_t     stageX() { return normal() ? 0 : MIRROR_STAGE; }
 
 static void label(int16_t x, uint8_t base, const char *text) { dogText(dogFontLabel, x, base, text); }
 
@@ -55,32 +47,12 @@ static const char *sourceName() {
   return source == 0 ? "DC" : (source == 1 ? "USB" : "PD");
 }
 
-// Volts and watts of the supply: "20V·65W"
-static void formatSupply(char *out, bool withWatts) {
-  out = dogFormat(out, (voltsX10() + 5) / 10);
-  *out++ = 'V';
-  if (withWatts) {
-    const int32_t limit = getX10WattageLimits();
-    strcpy(out, "·");
-    out = dogFormat(out + strlen(out), limit > 0 ? limit / 10 : 0);
-    *out++ = 'W';
-  }
-  *out = 0;
-}
-
 static void drawBig(uint16_t value) {
   if (normal()) {
     dogBigRight(BIG_RIGHT, value);
   } else {
     dogBig(-1, value); // the digits have an empty first column
   }
-}
-
-static void drawArrow(int16_t x, uint8_t y, uint8_t length) {
-  OLED::drawFilledRect(x, y, x + length - 1, y, false);
-  OLED::drawFilledRect(x + length - 2, y - 1, x + length - 2, y + 1, false);
-  OLED::drawFilledRect(x + length - 3, y - 2, x + length - 3, y - 2, false);
-  OLED::drawFilledRect(x + length - 3, y + 2, x + length - 3, y + 2, false);
 }
 
 // "-" on the rear button's side and "+" on the front button's, on the row of the power bar
@@ -96,32 +68,6 @@ static void drawMinusPlus() {
   if (dogPressed(false)) {
     OLED::invertRect(frontRight ? 0 : OLED_WIDTH - 6, 23, frontRight ? 5 : OLED_WIDTH - 1, 31);
   }
-}
-
-// The power bar with the watts next to it
-static void drawPowerRow() {
-  const bool    frontRight = dogFrontOnRight();
-  const int16_t x0 = frontRight ? 8 : 36, x1 = x0 + 83;
-  OLED::drawFilledRect(x0, 23, x1, 23, false);
-  OLED::drawFilledRect(x0, 30, x1, 30, false);
-  OLED::drawFilledRect(x0, 23, x0, 30, false);
-  OLED::drawFilledRect(x1, 23, x1, 30, false);
-  const int32_t limit = getX10WattageLimits();
-  uint32_t      fill  = limit > 0 ? (x10WattHistory.average() * 80) / limit : 0;
-  if (fill > 80) {
-    fill = 80;
-  }
-  if (fill) {
-    OLED::drawFilledRect(x0 + 2, 25, x0 + 1 + fill, 28, false);
-  }
-  char text[8];
-  formatUnit(text, wattsNow(), "W");
-  if (frontRight) {
-    dogSmallRight(115, text, POWER_TEXT_BASE);
-  } else {
-    dogSmall(10, text, POWER_TEXT_BASE);
-  }
-  drawMinusPlus();
 }
 
 // Rear button held: a block with what it does, the temperature stays, the line below fills from the rear side
@@ -148,112 +94,215 @@ static bool drawStopHold(uint16_t temperature) {
   return true;
 }
 
-// Boost: what it heads for and how long it may still last; the dog stays out of it
-static void drawBoostScreen() {
-  const int16_t x0 = stageX();
-  label(x0 + 4, 11, "BOOST");
-  OLED::invertRect(x0, 0, x0 + 45, 11);
-  drawArrow(x0, 17, 6);
-  char  text[12];
-  char *end = dogFormat(text, getSettingValue(SettingsOptions::BoostTemp));
-  strcpy(end, "°");
-  dogSmall(x0 + 8, text, 21);
-  dogFormat(text, dogBoostSecondsLeft());
-  strcat(text, "s");
-  dogSmall(x0 + 44, text, 21);
-  drawBig(getTipTemp());
-  drawPowerRow();
-}
+// ---- Heating, soldering and boost: the stage on the left, the temperature block on the right; turned, they swap ----
+// Normal: stage from x=0, block at x=90 (arrow) and 97 (digits), keys at 96. Turned: block at 0, keys at 0, stage from 35.
+static int16_t stageX() { return normal() ? 0 : 35; }
+static int16_t blockX() { return normal() ? 90 : 0; }
+#define STAGE_WIDTH 93
+#define CURVE_TOP   19
+#define CURVE_BOTTOM 31
+#define DIGIT_PITCH 7 // the label font's digits are 6 wide
 
-// A weak supply slows heating up, and says so in the bottom row
-static bool heatingLimited() {
-  const int32_t limit = getX10WattageLimits();
-  return limit > 0 && limit <= DOG_WEAK_SUPPLY_X10W;
-}
-
-static void drawHeatingScreen() {
-  if (heatingLimited()) {
-    const int16_t x0 = stageX();
-    drawArrow(x0, 5, 7);
-    char text[12];
-    formatUnit(text, getSettingValue(SettingsOptions::SolderingTemp), "°");
-    label(x0 + 9, LABEL_BASE, text);
-    dogDrawCurve(x0, x0 + 73, CURVE_TOP, CURVE_BOTTOM, currentTempTargetDegC, DogCurve::Heat, true);
-    drawBig(getTipTemp());
-    label(5, KEY_LABEL_BASE, DOG_T("Netzteil", "Supply"));
-    formatSupply(text, true);
-    const uint8_t chars = strlen(text) - 1; // the dot takes two bytes
-    label(125 - chars * LABEL_ADVANCE, KEY_LABEL_BASE, text);
-    OLED::invertRect(0, 21, OLED_WIDTH - 1, OLED_HEIGHT - 1);
-    return;
+// The real tip temperature in the label font with the ring, the arrow in front of it: >0 up, <0 down
+static void drawTempBlock(uint16_t value, int8_t arrow) {
+  const int16_t x = blockX();
+  char          text[6];
+  dogFormat(text, value);
+  int16_t pen = x + 7;
+  for (const char *c = text; *c; c++, pen += DIGIT_PITCH) {
+    const char digit[2] = {*c, 0};
+    dogText(dogFontLabel, pen, 10, digit);
   }
-  dogDrawRunning(normal() ? 0 : OLED_WIDTH - DOG_RUN_WIDTH, 0);
-  drawBig(getTipTemp());
-  drawPowerRow();
+  dogBlit(pen + 1, 0, 5, 8, dogRing);
+  if (arrow) {
+    dogBlit(x, 3, 5, 8, arrow > 0 ? dogTrendUp : dogTrendDown);
+  }
 }
 
-// Seconds until sleep, 0 unless they are about to run out
-static uint32_t sleepCountdown() {
-#ifndef NO_SLEEP_MODE
-  if (getSettingValue(SettingsOptions::Sensitivity) && getSettingValue(SettingsOptions::SleepTime)) {
-    const TickType_t last    = lastButtonTime < lastMovementTime ? lastMovementTime : lastButtonTime;
-    const TickType_t elapsed = xTaskGetTickCount() - last;
-    const TickType_t timeout = getSleepTimeout();
-    if (elapsed < timeout && timeout - elapsed <= TICKS_SECOND * 10) {
-      return (timeout - elapsed) / TICKS_SECOND + 1;
+// The tiny line under the temperature, right aligned under the ring
+static void drawUnderTemp(const char *text, bool check) {
+  const int16_t right = blockX() + 33, width = dogTextWidth(dogFontTiny, text);
+  dogText(dogFontTiny, right - width + 1, 16, text);
+  if (check) {
+    dogBlit(right - width - 6, 11, 5, 8, iconTinyCheck);
+  }
+}
+
+static void formatTarget(char *out, uint16_t value) {
+  strcpy(out, DOG_T("ZIEL ", "SET "));
+  formatUnit(out + strlen(out), value, "°");
+}
+
+// "65W 3.2A"
+static void formatPower(char *out) {
+  formatUnit(out, wattsNow(), "W ");
+  formatX10(out + strlen(out), ampsX10(), 'A');
+}
+
+// The legs: frames advance at fpsX10 / 10 a second, from the time and not the frame rate of the screen
+static const uint8_t *trotFrame(uint32_t fpsX10) {
+  static const uint8_t *const frames[] = {dogTrot0, dogTrot1, dogTrot2, dogTrot3};
+  static TickType_t           last     = 0;
+  static uint32_t             phase    = 0; // frames * 10 * TICKS_SECOND
+  const TickType_t            now      = xTaskGetTickCount();
+  const TickType_t            dt       = now - last > TICKS_100MS ? TICKS_100MS : now - last;
+  last                                 = now;
+  phase                                = (phase + fpsX10 * dt) % (4 * 10 * TICKS_SECOND);
+  return frames[phase / (10 * TICKS_SECOND)];
+}
+
+// The dog 24x13, its columns shifted down by rowAt(column): it leans with the ground under it
+static void drawTrot(int16_t x, const uint8_t *frame, int16_t yBack, int16_t yFront) {
+  for (uint8_t col = 0; col < 24; col++) {
+    // the paws are on columns 3 and 16; between and beyond them the line through both
+    const int16_t num    = (yFront - yBack) * (col - 3);
+    const int16_t ground = yBack + (num + (num < 0 ? -6 : 6)) / 13;
+    for (uint8_t row = 0; row < 13; row++) {
+      const int16_t px = x + col, py = ground - 13 + row;
+      if (((frame[(row / 8) * 24 + col] >> (row % 8)) & 1) && px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT) {
+        OLED::drawFilledRect(px, py, px, py, false);
+      }
     }
   }
-#endif
-  return 0;
 }
 
-// The top line at temperature: the check mark while nothing draws power, the set point under load, the countdown before sleep
-static void drawTopLine(int16_t x0) {
-  static bool    underLoad = false;
-  const int32_t  limit     = getX10WattageLimits();
-  const uint32_t x10W      = x10WattHistory.average();
-  underLoad                = limit > 0 && x10W * 100 > (uint32_t)limit * (underLoad ? 30 : 40); // no flicker round the threshold
-  const uint32_t countdown = sleepCountdown();
-  char           text[16];
-  if (countdown) {
-    strcpy(text, DOG_T("SCHLAF IN ", "SLEEP IN "));
-    dogFormat(text + strlen(text), countdown);
-    dogSmall(x0, text, 9);
-  } else if (underLoad) {
-    strcpy(text, DOG_T("Soll ", "Set "));
-    dogFormat(text + strlen(text), getSettingValue(SettingsOptions::SolderingTemp));
-    label(x0 + 1, LABEL_BASE, text);
+static uint16_t setPoint() { return getSettingValue(SettingsOptions::SolderingTemp); }
+
+/*
+ * Heating up, only until the set point is reached the first time:
+ *   65W 3.2A               ^ 185°
+ *                           ZIEL 350°
+ *   - - - - - - - - - - -  [ - ][ + ]
+ *        dog on the curve  [   ][   ]
+ */
+static void drawHeatingScreen() {
+  const int16_t x0 = stageX();
+  char          text[16];
+  formatPower(text);
+  dogSmall(x0, text, 7);
+  uint8_t       rows[STAGE_WIDTH];
+  const uint8_t count = dogDrawCurve(x0, STAGE_WIDTH, CURVE_TOP, CURVE_BOTTOM, currentTempTargetDegC, rows);
+  // The dog runs at the newest end of the curve, uphill; at the start it waits at the left end
+  const int16_t front = count > 17 ? count - 1 : 16; // column of the front paw, in samples
+  auto          rowAt = [&](int16_t i) -> int16_t { return count == 0 ? CURVE_BOTTOM : rows[i < 0 ? 0 : (i >= count ? count - 1 : i)]; };
+  int16_t       yBack = rowAt(front - 13), yFront = rowAt(front);
+  yFront              = yFront < yBack - 12 ? yBack - 12 : yFront; // at most 45 degrees
+  uint32_t fpsX10     = wattsNow() * 200 / 65;                   // 20 frames a second at 65 W
+  drawTrot(x0 + front - 16, trotFrame(fpsX10 > 200 ? 200 : fpsX10), yBack, yFront);
+  drawTempBlock(getTipTemp(), 1);
+  formatTarget(text, setPoint());
+  drawUnderTemp(text, false);
+  dogKeyPair(normal() ? 96 : 0, nullptr, nullptr);
+}
+
+/*
+ * Boost, while the front button is held, 30 s at most:
+ *   [bolt BOOST]             400°
+ *                          NOCH 23 S
+ *   ===  ==  dog sprinting
+ *   - - - - - - - - - - - - - - - -  (the ground runs to the left)
+ */
+static void drawBoostScreen() {
+  const int16_t x0 = stageX();
+  dogBlit(x0 + 2, 1, 5, 8, iconBoltSmall);
+  dogSmall(x0 + 9, "BOOST", 8);
+  OLED::invertRect(x0, 0, x0 + 39, 9);
+  drawTempBlock(getTipTemp(), 0);
+  char text[16];
+  if (dogLangDE()) {
+    strcpy(text, "NOCH ");
+    strcpy(dogFormat(text + 5, dogBoostSecondsLeft()), " S");
   } else {
-    dogBlit(x0, 3, 8, 8, iconReady);
-    label(x0 + 12, LABEL_BASE, DOG_T("Bereit", "Ready"));
+    strcpy(dogFormat(text, dogBoostSecondsLeft()), " S LEFT");
+  }
+  drawUnderTemp(text, false);
+
+  const TickType_t now  = xTaskGetTickCount();
+  const uint8_t    beat = (now / (TICKS_SECOND / 20)) % 4; // the lines and the dust change 20 times a second
+  const int16_t    dogX = x0 + 44;
+  drawTrot(dogX, trotFrame(400), 30, 30);
+  static const uint8_t LINE_ROW[3] = {20, 23, 26}, LINE_LENGTH[3] = {9, 6, 11};
+  for (uint8_t i = 0; i < 3; i++) {
+    const int16_t end = dogX - 3 - ((beat + i) % 2) * 2;
+    OLED::drawFilledRect(end - LINE_LENGTH[i] + 1, LINE_ROW[i], end, LINE_ROW[i], false);
+  }
+  for (uint8_t i = 0; i < 3; i++) { // dust behind the hind paws, drifting back
+    const int16_t dx = dogX - 1 - i * 3 - beat;
+    OLED::drawFilledRect(dx, 29 - (i + beat) % 2, dx, 29 - (i + beat) % 2, false);
+  }
+  const uint8_t scroll = (now * 80 / TICKS_SECOND) % 6; // the ground passes at 80 px a second
+  for (int16_t x = x0; x < x0 + STAGE_WIDTH; x++) {
+    if ((x - x0 + scroll) % 6 < 3) {
+      OLED::drawFilledRect(x, 31, x, 31, false);
+    }
   }
 }
 
 /*
- * Soldering at temperature:
- *   [check] Bereit           350°
- *   ------------------ set line
- *   -  [=====         ]  9W    +
+ * Soldering, once the set point has been reached: no dog
+ *   Platine bleifrei     v 352°
+ *   65W 3.2A               ZIEL 350°   (2 s after a change: "350° SAC305  o o * o o")
+ *   ---- curve ----------  [ - ][ + ]
  */
+struct DogSolder {
+  const char *de, *en, *alloy;
+};
+static const DogSolder SOLDERS[] = {
+    {"Empfindlich", "Sensitive", "SnBi"}, {"Platine mit Blei", "Leaded PCB", "SnPb"}, {"Platine bleifrei", "Lead-free PCB", "SAC305"},
+    {"Dicke Pads", "Thick pads", "SnCu"},  {"Kabel + Masse", "Wires + mass", "Max"},
+};
+#define SOLDER_COUNT (sizeof(SOLDERS) / sizeof(SOLDERS[0]))
+
+static void drawSolderingScreen() {
+  const int16_t  x0     = stageX();
+  const int8_t   solder = dogPresetIndex();
+  const uint16_t tip = getTipTemp(), set = setPoint();
+  dogText(dogFontLabel, x0, 10, solder < 0 ? DOG_T("Manuell", "Manual") : (dogLangDE() ? SOLDERS[solder].de : SOLDERS[solder].en));
+  char text[16];
+  if (dogLotChangedAt && xTaskGetTickCount() - dogLotChangedAt < TICKS_SECOND * 2) {
+    formatUnit(text, set, "° ");
+    if (solder >= 0) {
+      strcat(text, SOLDERS[solder].alloy);
+    }
+    dogSmall(x0, text, 19);
+    int16_t dots = x0 + dogTextWidth(dogFontSmall, text) + 2;
+    dots         = dots < x0 + 54 ? x0 + 54 : dots;
+    for (uint8_t i = 0; i < SOLDER_COUNT; i++) {
+      const int16_t x = dots + i * 5;
+      if (i == solder) {
+        OLED::drawFilledRect(x, 14, x + 2, 16, false);
+      } else {
+        OLED::drawFilledRect(x + 1, 15, x + 1, 15, false);
+      }
+    }
+  } else {
+    formatPower(text);
+    dogSmall(x0, text, 19);
+  }
+  uint8_t rows[STAGE_WIDTH];
+  dogDrawCurve(x0, STAGE_WIDTH, CURVE_TOP, CURVE_BOTTOM, currentTempTargetDegC, rows);
+  const int16_t error   = (int16_t)tip - (int16_t)set;
+  const bool    reached = error > -2 && error < 2;
+  drawTempBlock(tip, reached ? 0 : (error < 0 ? 1 : -1));
+  if (reached) {
+    drawUnderTemp(DOG_T("BEREIT", "READY"), true);
+  } else {
+    formatTarget(text, set);
+    drawUnderTemp(text, false);
+  }
+  dogKeyPair(normal() ? 96 : 0, nullptr, nullptr);
+}
+
 void ui_draw_soldering_basic_status(bool boostModeOn) {
   if (drawStopHold(getTipTemp())) {
     return;
   }
   if (boostModeOn) {
     drawBoostScreen();
-    return;
-  }
-  if (!dogSolderTimerStart) {
+  } else if (!dogSolderTimerStart) {
     drawHeatingScreen();
-    return;
-  }
-  const int16_t x0 = stageX();
-  drawTopLine(x0);
-  dogDrawCurve(x0, x0 + CURVE_WIDTH - 1, CURVE_TOP, CURVE_BOTTOM, currentTempTargetDegC, DogCurve::Steady, true);
-  drawBig(getTipTemp());
-  drawPowerRow();
-  if (xTaskGetTickCount() < dogReachedUntil) {
-    OLED::invertRect(0, 0, OLED_WIDTH - 1, OLED_HEIGHT - 1); // the moment the set point is reached
+  } else {
+    drawSolderingScreen();
   }
 }
 
@@ -311,7 +360,7 @@ static const char *presetUse(uint8_t line) {
   return preset < 0 ? nullptr : (dogLangDE() ? de : en)[preset][line];
 }
 
-void dogDrawTemperatureView(bool heating) {
+void dogDrawTemperatureView(bool) {
   const bool     inF  = getSettingValue(SettingsOptions::TemperatureInF);
   const uint16_t set  = getSettingValue(SettingsOptions::SolderingTemp);
   const uint16_t setC = inF ? TipThermoModel::convertFtoC(set) : set;
@@ -322,8 +371,6 @@ void dogDrawTemperatureView(bool heating) {
   if (use0) {
     dogSmall(xMin, use0, 9);
     dogSmall(xMin, presetUse(1), 18);
-  } else if (heating) {
-    dogDrawCurve(xMin, xMax, 1, 20, setC, DogCurve::Steady, true);
   } else {
     char text[12];
     strcpy(text, DOG_T("IST ", "TIP "));
@@ -394,11 +441,7 @@ void ui_draw_soldering_detailed_sleep(TemperatureType_t tipTemp) { drawSleepScre
 void ui_draw_soldering_basic_sleep(TemperatureType_t tipTemp) { drawSleepScreen(tipTemp); }
 
 /*
- * Home, the iron is not heating: what it would heat to and with what, and what each button does
- *   Bleifrei              350°
- *   PD 20V·65W
- *   = Menü           Löten  >
- * The variant has the dog head on the left and runs and barks when picked up. Alerts replace everything else.
+ * Home: the screen itself is in ts101_dog_home.cpp, alerts replace it
  */
 static const char *alertFooter(char *text) {
   switch (dogAlert) {
@@ -412,52 +455,7 @@ static const char *alertFooter(char *text) {
   }
 }
 
-static void drawHeadClipped(int16_t x, const uint8_t *sprite) {
-  dogBlit(x, 0, DOG_HEAD_WIDTH, 24, sprite);
-  OLED::drawFilledRect(x, 20, x + DOG_HEAD_WIDTH - 1, 23, true);
-}
-
-// The preset's name, or "Soll" for a set point of your own
-static const char *presetLabel(bool upper) {
-  static const char *const de[] = {"SnBi", "Bleilot", "Bleifrei", "SnCu", "Masse"}, *const en[] = {"SnBi", "Leaded", "Unleaded", "SnCu", "Mass"};
-  static const char *const deUp[] = {"SNBI", "BLEILOT", "BLEIFREI", "SNCU", "MASSE"}, *const enUp[] = {"SNBI", "LEADED", "UNLEADED", "SNCU", "MASS"};
-  const int8_t             preset = dogPresetIndex();
-  if (preset >= 0) {
-    return upper ? (dogLangDE() ? deUp : enUp)[preset] : (dogLangDE() ? de : en)[preset];
-  }
-  return upper ? DOG_T("SOLL", "SET") : DOG_T("Soll", "Set");
-}
-
-static void drawHomeKeys() {
-  if (dogDrawHold(DOG_T("HALTEN: TEMPERATUR", "HOLD: TEMPERATURE"), true, DOG_HOLD_FULL) || dogDrawHold(DOG_T("HALTEN: INFO", "HOLD: INFO"), false, DOG_HOLD_FULL)) {
-    return;
-  }
-  const bool    frontRight = dogFrontOnRight();
-  const int16_t barsX      = frontRight ? 0 : OLED_WIDTH - 6;
-  for (uint8_t y = 26; y <= 30; y += 2) {
-    OLED::drawFilledRect(barsX, y, barsX + 5, y, false);
-  }
-  label(frontRight ? 9 : 86, KEY_LABEL_BASE, DOG_T("Menü", "Menu"));
-  // The arrow points at the button
-  label(frontRight ? 73 : 7, KEY_LABEL_BASE, DOG_T("Löten", "Solder"));
-  for (uint8_t i = 0; i < 4; i++) {
-    const int16_t x = frontRight ? OLED_WIDTH - 4 + i : 3 - i;
-    OLED::drawFilledRect(x, 24 + i, x, 30 - i, false);
-  }
-  if (dogPressed(true)) {
-    OLED::invertRect(frontRight ? 71 : 0, 20, frontRight ? OLED_WIDTH - 1 : 56, OLED_HEIGHT - 1);
-  }
-  if (dogPressed(false)) {
-    OLED::invertRect(frontRight ? 0 : 84, 20, frontRight ? 41 : OLED_WIDTH - 1, OLED_HEIGHT - 1);
-  }
-}
-
 void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
-  static TickType_t lastSeenMovement = 0;
-  static TickType_t pickedUpAt       = 0;
-  static bool       tempOnDisplay    = false;
-  const TickType_t  now              = xTaskGetTickCount();
-
   if (isTipDisconnected()) {
     dogDrawNotice(iconWarning, DOG_T("SPITZE!", "NO TIP!"), DOG_T("KEINE SPITZE ERKANNT", "CONNECT A TIP"));
     return;
@@ -467,60 +465,7 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
     dogDrawNotice(iconWarning, dogAlert == DogAlert::Handle ? DOG_T("GRIFF!", "GRIP!") : DOG_T("HEIZUNG!", "HEATER!"), alertFooter(text));
     return;
   }
-  if (lastMovementTime != lastSeenMovement) {
-    if (lastMovementTime - lastSeenMovement > TICKS_SECOND * 5) {
-      pickedUpAt = lastMovementTime; // picked up after lying still
-    }
-    lastSeenMovement = lastMovementTime;
-  }
-  if (tipTemp > 55) {
-    tempOnDisplay = true;
-  } else if (tipTemp < 45) {
-    tempOnDisplay = false;
-  }
-
-  const uint16_t set  = getSettingValue(SettingsOptions::SolderingTemp);
-  if (tempOnDisplay) {
-    // Still hot: the triangle, the cooling curve down to the dotted 50 °C, and the tip instead of the set point
-    const int16_t x0 = stageX();
-    dogBlit(x0, 1, 7, 8, iconHot);
-    label(x0 + 11, LABEL_BASE, DOG_T("Heiß", "Hot"));
-    dogDrawCurve(x0, x0 + 71, 12, 19, 50, DogCurve::Cool, true);
-    if (!(getSettingValue(SettingsOptions::CoolingTempBlink) && (now % 1000 < 300))) {
-      drawBig(tipTemp);
-    }
-  } else if (getSettingValue(SettingsOptions::DogHomeVariant)) {
-    // Dog: runs across for a second, then the head barks for a second and calms down
-    const TickType_t sincePickup = now - pickedUpAt;
-    if (pickedUpAt && sincePickup < TICKS_SECOND) {
-      dogDrawRunAcross();
-      OLED::drawFilledRect(0, 20, OLED_WIDTH - 1, 23, true);
-    } else {
-      const bool bark = pickedUpAt && sincePickup < TICKS_SECOND * 2 && ((now / (TICKS_100MS * 3)) % 2);
-      const int16_t x = normal() ? 0 : OLED_WIDTH - DOG_HEAD_WIDTH;
-      drawHeadClipped(x, bark ? dogHeadBark : dogHead);
-      const int16_t textX = normal() ? 35 : 42;
-      dogSmall(textX, presetLabel(true), 10);
-      char supply[12];
-      strcpy(supply, sourceName());
-      strcat(supply, " ");
-      formatSupply(supply + strlen(supply), false);
-      dogSmall(textX, supply, 18);
-      drawBig(set);
-    }
-  } else {
-    label(normal() ? 1 : 64, LABEL_BASE, presetLabel(false));
-    char supply[16];
-    strcpy(supply, sourceName());
-    strcat(supply, " ");
-    formatSupply(supply + strlen(supply), true);
-    if (heatingLimited()) {
-      strcat(supply, "!");
-    }
-    dogSmall(normal() ? 0 : 67, supply, 19);
-    drawBig(set);
-  }
-  drawHomeKeys();
+  dogDrawHome(tipTemp);
 }
 
 /*

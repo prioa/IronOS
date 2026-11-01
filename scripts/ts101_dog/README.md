@@ -26,10 +26,16 @@ into reference images for `preview/compare.py`.
   and the menu, `fonts/label8x10.txt` for the mixed-case labels ("Bleifrei", "Löten"): taken from the boards, with the letters
   they have no sample of drawn in the same style. Barlow SemiBold for the words on full screen notices. `make_fonts.py` turns
   them into `ts101_dog_fonts.h/.cpp`; the licences are in `fonts/` (SIL OFL 1.1).
-- **Start**: the preset's name (or "Soll" for a set point of your own), the supply (`PD 20V·65W`, marked with ! when weak), the set point, `Menü` and `Löten`
-  next to their buttons. The menu switch `START MIT HUND` picks the variant with the dog head, which also runs and barks when the
-  iron is picked up. While the tip is still hot: a warning triangle, the cooling curve down to a dotted 50 C and the tip.
-  The lifetime soldering time is on the Info statistics page.
+- **Start** (`ts101_dog_home.cpp`, bitmaps in `art/home.txt`): the dog, statistics changing every 2 s, the tip temperature with a
+  trend arrow (from 0.3 C/s, off below 0.15 C/s), the curve of the last 10 minutes and the button pair next to the buttons. Held
+  the other way round the blocks swap sides and the front button's box moves to the left; nothing is mirrored. The number blinks
+  while hot if `COOLING TEMP BLINK` is on. The history is fed on every GUI frame, so the curve goes on through soldering.
+- **Dog**: follows the tilt of the iron's long axis, 8 updates a second: the head (rows 0-11) turns by half the tilt, at most 12
+  degrees, and moves a pixel from 6 degrees; from 45 degrees towards the tip it also drops a pixel. Shaken, the whole dog hops.
+  The sensor axis is `DOG_ACCEL_ALONG` / `DOG_ACCEL_ALONG_SIGN` at the top of `ts101_dog_home.cpp`, **not yet checked on the iron**.
+- **Statistics**: `GESAMT` (lifetime hours with the heater on in soldering mode), `AKTUELL` (soldering minutes since power on, not
+  saved), `VORGÄNGE`, `BOOSTS`. Counters are saved on the Start screen only: no flash write with the heater on. Disconnecting
+  power while soldering loses what was counted since the last time on Start.
 - **Lock**: holding both buttons on Start switches it on or off for the sessions that follow, with a notice, as long as `SPERRE`
   in the menu isn't off; that entry also sets what it locks. To unlock: both buttons stop, then the same gesture on Start.
 - **Soldering**: heating up, the running dog with the power bar; with a weak supply no dog, the set point, a flat curve and an
@@ -79,7 +85,8 @@ firmware with the logo on every push to `ts101-schaeferhund`.
 `preview/sheet.py <out dir> sheet.png` puts them on one sheet, `preview/compare.py <out dir> <mock dir> out.png` next to
 the mocks with the count of differing pixels. `preview/test_buttons.sh` runs the real button logic over simulated time
 and checks rule 2 on every screen and the #1663 case. `preview/page.py <out dir> <out dir EN> out.html` puts every screen with
-the rules and the button table on one page. Needs `clang++` and a built `source/Core/Gen`.
+the rules and the button table on one page. `preview/check_home.py <out dir>` checks the home screen pixel by pixel (button
+pair, dog at rest and when tilted, statistics limit, arrow, curve). Needs `clang++` and a built `source/Core/Gen`.
 
 ## Flashing from macOS
 

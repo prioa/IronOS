@@ -14,9 +14,8 @@ extern uint16_t   dogHeatupStartTempC; // tip temperature when heating up starte
 extern TickType_t dogReachedUntil;     // the screen stays inverted until this tick: the set point was just reached
 extern TickType_t dogSleepEnterTime;   // when sleep started, for the lie down animation
 extern uint32_t   dogLastSessionSeconds; // length of the last soldering session, for the home screen
+extern TickType_t dogLotChangedAt;     // a click changed the solder: its temperature and alloy show for 2 s
 
-void dogDrawRunning(int16_t x, int8_t y);               // running dog, any position; clipped at the screen edge
-void dogDrawRunAcross();                                // the dog runs across the stage of the whole screen
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor); // major:mm
 
 // OR a sprite (page format, height a multiple of 8) onto the screen at any position, keeping what is under it
@@ -47,6 +46,10 @@ char   *dogFormat(char *out, uint16_t value); // decimal digits, returns the end
 uint8_t dogBigWidth(uint16_t value);
 void    dogBig(int16_t x, uint16_t value);
 void    dogBigRight(int16_t x1, uint16_t value);
+
+// ---- The two button boxes, 15x15 on rows 17-31: the left one at x, the other 17 px further. No icon draws - and + ----
+void dogKeyBox(uint8_t x, bool front, const uint8_t *icon, uint8_t iconX, uint8_t iconY, uint8_t width, uint8_t height);
+void dogKeyPair(uint8_t x, const uint8_t *front, const uint8_t *rear);
 
 // ---- Key row (rows 23-31): each label stays next to its button, wherever the orientation puts it ----
 struct DogKey {
@@ -86,7 +89,8 @@ void dogDrawInfoPage(uint8_t page);
 
 // ---- Temperature view: changes the set point; while soldering it lives inside the soldering mode, so the heater and every safety check keep running ----
 void dogAdjustOpened();                         // restarts the view for a fresh press
-bool dogAdjustButtons(ButtonState buttons, bool soldering); // applies the buttons, clicks jump between presets while soldering; true when the view should close
+bool dogAdjustButtons(ButtonState buttons); // applies the buttons; true when the view should close
+void dogJumpPreset(bool up);                // the next preset in that direction, nothing at the ends
 int8_t dogPresetIndex();                        // which preset the set point is on, -1 for none
 void dogDrawTemperatureView(bool heating);      // set point, scale, and the curve or the preset's use
 #define DOG_ADJUST_TIMEOUT (TICKS_SECOND * 2)
@@ -97,17 +101,26 @@ extern const char dogLanguageCode[];
 inline bool       dogLangDE() { return dogLanguageCode[0] == 'D' && dogLanguageCode[1] == 'E'; }
 #define DOG_T(de, en) (dogLangDE() ? (de) : (en))
 
+// ---- Home screen (ts101_dog_home.cpp) ----
+void dogDrawHome(uint16_t shownTemperature); // the temperature as shown, in the unit of the setting
+void dogHomeTick();                          // every GUI frame in every mode: the 10 minute curve and the trend arrow
+void dogHomeHistoryReset();
+void dogHomeMotionUpdate();                  // follows the sensor, 8 times a second however often it is called
+void dogHomeMotionReset();
+extern volatile int16_t dogAccelRaw[3];      // the latest reading, written by the movement thread
+extern uint16_t         dogSessionMinutes;   // soldering minutes since power on, not saved
+void dogCountSession();                      // a soldering session started; saved on the home screen
+void dogCountBoost();                        // a boost started; saved on the home screen
+
 // Tip temperature history for the curve
 void dogCurveReset();
-#define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2 + TICKS_100MS / 2) // 4 samples a second: 18 s on screen while soldering
-#define DOG_COOL_SAMPLE_TICKS  (TICKS_SECOND * 5 / 2)                // one every 2.5 s: 3 minutes of cooling on the home screen
+#define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2 + TICKS_100MS / 2) // 4 samples a second: 23 s on screen
 void dogCurveSample(uint16_t tipC, TickType_t interval = DOG_CURVE_SAMPLE_TICKS);
-// The vertical range: the 45 degrees below the set point, from room temperature up to the set point, from 50 C up to the hottest sample
-enum class DogCurve { Steady, Heat, Cool };
-// The last 18 s between the given columns and rows, newest on the right; dots = dotted set point line
-void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots);
+// One sample a column from x0, the newest on the right once full; the range follows the samples and the set point,
+// dotted set line every 3rd pixel. Writes each sample's row to rows and returns how many there are
+uint8_t dogDrawCurve(int16_t x0, uint8_t width, uint8_t y0, uint8_t y1, uint16_t setC, uint8_t *rows);
 
-// Lifetime soldering time, counted while the set point is held and saved when back on the home screen
+// Lifetime soldering time, counted while soldering mode runs the heater and saved when back on the home screen
 void dogCountSolderTime();
 
 // Seconds of boost left, for the boost screen (set by Soldering.cpp)

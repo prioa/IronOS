@@ -63,6 +63,9 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
   }
 #endif
   if (!shouldBeSleeping()) {
+#ifdef TS101_DOG_UI
+    dogPressConsumed(); // a click that woke the iron must not reach soldering, where it would change the solder
+#endif
     return cxt->previousMode;
   }
 

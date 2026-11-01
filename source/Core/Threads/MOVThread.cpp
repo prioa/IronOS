@@ -24,6 +24,7 @@
 #include "power.hpp"
 #include "stdlib.h"
 #include "task.h"
+#include "ts101_dog_ui.hpp"
 
 #define MOVFilter 8
 uint8_t    accelInit        = 0;
@@ -180,6 +181,11 @@ void startMOVTask(void const *argument __unused) {
     }
 #endif
     readAccelerometer(tx, ty, tz, rotation);
+#ifdef TS101_DOG_UI
+    dogAccelRaw[0] = tx;
+    dogAccelRaw[1] = ty;
+    dogAccelRaw[2] = tz;
+#endif
     if (getSettingValue(SettingsOptions::OrientationMode) == 2) {
       if (rotation != ORIENTATION_FLAT) {
         OLED::setRotation(rotation == ORIENTATION_LEFT_HAND); // link the data through

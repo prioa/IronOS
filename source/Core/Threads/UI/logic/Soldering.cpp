@@ -10,7 +10,6 @@
 
 #ifdef TS101_DOG_UI
 #define SCRATCH_SESSION_DONE 1 // state 6 bit: session bookkeeping done for this entry
-#define SCRATCH_ADJUST_OPEN  2 // state 6 bit: the temperature view is showing; the heater stays on
 static TickType_t boostEndedAt = 0;
 
 static TickType_t boostStartedAt = 0; // 0 = no boost running
@@ -27,6 +26,7 @@ static void limitBoost(const ButtonState buttons, guiContext *cxt) {
     const TickType_t now = xTaskGetTickCount() | 1;
     if (!boostStartedAt && !boostUsedUp) {
       boostStartedAt = now;
+      dogCountBoost();
     }
     if (boostUsedUp || now - boostStartedAt >= DOG_BOOST_MAX) {
       boostUsedUp               = true;
@@ -43,15 +43,8 @@ static void limitBoost(const ButtonState buttons, guiContext *cxt) {
 
 static bool boostJustEnded() { return boostEndedAt && (xTaskGetTickCount() - boostEndedAt) < DOG_BOOST_CLICK_GUARD; }
 
-// Front handles, rear leads: a click only ever opens something or changes the view, never the heater
+// A click changes the solder at once: rear one colder, front one hotter, nothing at the ends; holding front boosts, rear stops
 static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt) {
-  if (cxt->scratch_state.state6 & SCRATCH_ADJUST_OPEN) {
-    if (dogAdjustButtons(buttons, true)) {
-      cxt->scratch_state.state6 &= ~SCRATCH_ADJUST_OPEN;
-      dogSettingsChanged(); // saved on the home screen: no flash write with the heater on, and it spares the flash
-    }
-    return OperatingMode::Soldering;
-  }
   if (dogHoldDone(false, DOG_HOLD_STOP)) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Right;
@@ -73,8 +66,12 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
   case BUTTON_F_SHORT:
   case BUTTON_B_SHORT:
     if (!boostJustEnded()) {
-      cxt->scratch_state.state6 |= SCRATCH_ADJUST_OPEN;
-      dogAdjustOpened();
+      const uint16_t before = getSettingValue(SettingsOptions::SolderingTemp);
+      dogJumpPreset(buttons == BUTTON_F_SHORT);
+      dogLotChangedAt = xTaskGetTickCount() | 1;
+      if (getSettingValue(SettingsOptions::SolderingTemp) != before) {
+        dogSettingsChanged(); // saved on the home screen: no flash write with the heater on, and it spares the flash
+      }
     }
     break;
   default:
@@ -96,7 +93,7 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
 
 OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt) {
 #ifdef TS101_DOG_UI
-  // Both buttons always stop at once: while locked, during boost, with the temperature view open
+  // Both buttons always stop at once: while locked, during boost
   if (dogBothDown()) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Right;
@@ -213,6 +210,8 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
       dogSolderTimerStart = 0;
       dogHeatupStartTempC = TipThermoModel::getTipInC();
       dogCurveReset();
+      dogLotChangedAt = 0;
+      dogCountSession();
     }
   }
   if (dogLockArmed && cxt->scratch_state.state1 < 2) {
@@ -266,9 +265,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #endif
   // Draw in the screen details
 #ifdef TS101_DOG_UI
-  if (cxt->scratch_state.state6 & SCRATCH_ADJUST_OPEN) {
-    dogDrawTemperatureView(true);
-  } else if (getSettingValue(SettingsOptions::DogSolderView) == 1) {
+  if (getSettingValue(SettingsOptions::DogSolderView) == 1) {
     ui_draw_soldering_power_status(cxt->scratch_state.state2);
   } else {
     ui_draw_soldering_basic_status(cxt->scratch_state.state2);

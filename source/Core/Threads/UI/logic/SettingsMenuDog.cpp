@@ -51,7 +51,6 @@ static const DogMenuItem displayItems[] = {
     {"INVERTIEREN", "INVERT", "HELL UND DUNKEL TAUSCHEN", "SWAP LIGHT AND DARK", OPT(OLEDInversion), Fmt::OnOff, nullptr},
     {"ANIMATION", "ANIMATION", "TEMPO DER MENÜ-SYMBOLE", "SPEED OF THE MENU ICONS", OPT(AnimationSpeed), Fmt::Animation, nullptr},
     {"LOGO", "LOGO", "WIE LANGE DAS BOOT-LOGO LÄUFT", "HOW LONG THE BOOT LOGO RUNS", OPT(LOGOTime), Fmt::Logo, nullptr},
-    {"START MIT HUND", "DOG ON START", "HUNDEKOPF AUF DEM STARTBILD", "DOG HEAD ON THE START SCREEN", OPT(DogHomeVariant), Fmt::OnOff, nullptr},
     {"DETAILANSICHT", "DETAIL VIEW", "BEIM LÖTEN ALLE MESSWERTE STATT DER KURVE", "ALL READINGS WHILE SOLDERING, NOT THE CURVE", OPT(DogSolderView), Fmt::OnOff, nullptr},
 };
 static const DogMenuItem systemItems[] = {

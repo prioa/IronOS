@@ -6,19 +6,9 @@
 TickType_t dogSolderTimerStart = 0;
 uint16_t   dogHeatupStartTempC = 0;
 TickType_t dogReachedUntil     = 0;
+TickType_t dogLotChangedAt     = 0;
 TickType_t dogSleepEnterTime   = 0;
 uint32_t   dogLastSessionSeconds = 0;
-
-void dogDrawRunning(int16_t x, int8_t y) {
-  static const uint8_t cycle[] = {0, 1, 2, 3, 2, 1}; // stretched to gathered and back
-  dogBlit(x, y, DOG_RUN_WIDTH, DOG_RUN_HEIGHT, dogRun[cycle[(xTaskGetTickCount() / (TICKS_100MS * 15 / 10)) % sizeof(cycle)]]);
-}
-
-void dogDrawRunAcross() {
-  const uint32_t lap  = TICKS_SECOND * 2;
-  const int32_t  span = OLED_WIDTH + DOG_RUN_WIDTH;
-  dogDrawRunning((int32_t)((xTaskGetTickCount() % lap) * span / lap) - DOG_RUN_WIDTH, 0);
-}
 
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor) {
   out    = dogFormat(out, major);
@@ -83,7 +73,7 @@ bool dogHandleTooHot() {
 }
 
 // ---- Temperature curve ----
-#define DOG_CURVE_SAMPLES      72
+#define DOG_CURVE_SAMPLES      93 // one a column across the stage
 static uint16_t   curve[DOG_CURVE_SAMPLES];
 static uint8_t    curveHead  = 0; // next slot to write
 static uint8_t    curveCount = 0;
@@ -107,66 +97,68 @@ void dogCurveSample(uint16_t tipC, TickType_t interval) {
   }
 }
 
-void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots) {
-  int32_t lo = (int32_t)setC - 45, hi = setC; // zoomed in below the set point so dips while soldering show up
-  if (range == DogCurve::Heat) {
-    lo = 20;
-  } else if (range == DogCurve::Cool) {
-    lo = 50;
-    hi = 60;
-    for (uint8_t i = 0; i < curveCount; i++) {
-      hi = curve[i] > hi ? curve[i] : hi;
-    }
+uint8_t dogDrawCurve(int16_t x0, uint8_t width, uint8_t y0, uint8_t y1, uint16_t setC, uint8_t *rows) {
+  // One sample a column, the oldest on the left; when the screen is full it runs to the left
+  const uint8_t count = curveCount < width ? curveCount : width;
+  auto          at    = [&](uint8_t i) { return curve[(curveHead + DOG_CURVE_SAMPLES - count + i) % DOG_CURVE_SAMPLES]; };
+  // The range follows what is shown and the set point, so the set line moves when the set point does: at least 36 degrees
+  int32_t lo = setC, hi = setC;
+  for (uint8_t i = 0; i < count; i++) {
+    lo = at(i) < lo ? at(i) : lo;
+    hi = at(i) > hi ? at(i) : hi;
   }
-  auto toY = [&](int32_t v) -> uint8_t {
-    v = v < lo ? lo : (v > hi ? hi : v);
-    return y1 - ((v - lo) * (y1 - y0)) / (hi - lo);
-  };
-  if (dots) {
-    const uint8_t setY = toY(setC);
-    for (int16_t x = x0; x <= x1; x += 2) {
-      OLED::drawFilledRect(x, setY, x, setY, false);
-    }
+  lo -= 2;
+  hi += 2;
+  if (hi - lo < 36) {
+    const int32_t middle = (lo + hi) / 2;
+    lo                   = middle - 18;
+    hi                   = middle + 18;
   }
-  // Every width shows the same 18 s; join neighbours with vertical strokes so steep changes stay visible
-  const uint8_t width = x1 - x0 + 1;
-  const uint8_t empty = DOG_CURVE_SAMPLES - curveCount;
-  bool          first = true;
-  uint8_t       prevY = 0;
-  for (uint8_t i = 0; i < width; i++) {
-    const uint8_t sample = ((uint16_t)i * DOG_CURVE_SAMPLES) / width;
-    if (sample < empty) {
-      continue;
-    }
-    const uint8_t y = toY(curve[(curveHead + sample - empty + DOG_CURVE_SAMPLES - curveCount) % DOG_CURVE_SAMPLES]);
-    if (first) {
-      prevY = y;
-      first = false;
-    }
-    OLED::drawFilledRect(x0 + i, y < prevY ? y : prevY, x0 + i, y < prevY ? prevY : y, false);
-    prevY = y;
+  auto toY = [&](int32_t v) -> uint8_t { return y1 - ((v - lo) * (y1 - y0) + (hi - lo) / 2) / (hi - lo); };
+  const uint8_t setY = toY(setC);
+  for (uint8_t i = 0; i < width; i += 3) {
+    OLED::drawFilledRect(x0 + i, setY, x0 + i, setY, false);
   }
+  // Neighbours joined with vertical strokes, so steep changes stay visible
+  for (uint8_t i = 0; i < count; i++) {
+    const uint8_t y = toY(at(i)), prev = i ? rows[i - 1] : y;
+    rows[i]         = y;
+    OLED::drawFilledRect(x0 + i, y < prev ? y : prev, x0 + i, y < prev ? prev : y, false);
+  }
+  return count;
 }
 
 // ---- Lifetime soldering time ----
 static TickType_t countLastTick = 0;
 static uint32_t   countTicks    = 0;
 static bool       settingsUnsaved  = false;
+uint16_t          dogSessionMinutes = 0;
+
+// One more on a lifetime counter; 65534 is the settings' maximum, see settings.yaml. Saved on the home screen.
+static void countUp(enum SettingsOptions option) {
+  const uint16_t value = getSettingValue(option);
+  if (value < 65534) {
+    setSettingValue(option, value + 1);
+    settingsUnsaved = true;
+  }
+}
+
+void dogCountSession() { countUp(SettingsOptions::TotalSolderSessions); }
+void dogCountBoost() { countUp(SettingsOptions::TotalBoosts); }
 
 void dogCountSolderTime() {
   const TickType_t now   = xTaskGetTickCount();
   TickType_t       delta = now - countLastTick;
   countLastTick          = now;
-  if (!dogSolderTimerStart || delta > TICKS_SECOND) {
-    return; // not at temperature yet, or first call after a break
+  if (delta > TICKS_SECOND) {
+    return; // first call after a break
   }
   countTicks += delta;
   if (countTicks >= 60 * TICKS_SECOND) {
     countTicks -= 60 * TICKS_SECOND;
-    uint16_t total = getSettingValue(SettingsOptions::TotalSolderMinutes);
-    if (total < 65534) { // the setting's maximum, see settings.yaml
-      setSettingValue(SettingsOptions::TotalSolderMinutes, total + 1);
-      settingsUnsaved = true;
+    countUp(SettingsOptions::TotalSolderMinutes);
+    if (dogSessionMinutes < 59940) { // 999 hours: the longest the home screen can show
+      dogSessionMinutes++;
     }
   }
 }

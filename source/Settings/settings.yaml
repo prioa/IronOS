@@ -309,3 +309,13 @@ settings:
     max: 1
     min: 0
     name: DogHomeVariant
+  - default: 0
+    increment: 1
+    max: 65534 # 0xFFFF marks a new, never written setting: it must be out of range so it is reset to 0
+    min: 0
+    name: TotalSolderSessions
+  - default: 0
+    increment: 1
+    max: 65534 # as above
+    min: 0
+    name: TotalBoosts

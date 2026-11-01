@@ -169,47 +169,36 @@ int main() {
   expect(!dogLockArmed, "am Start beide halten löst die Sperre");
   setSettingValue(SettingsOptions::LockingMode, 0);
 
-  puts("== Löten, Klicks ändern das Heizen nicht");
+  puts("== Löten, ein Klick wechselt das Lot sofort");
+  setSettingValue(SettingsOptions::SolderingTemp, 320);
   startSoldering();
-  const uint16_t before = setPoint();
   click(true);
-  expect(setPoint() == before, "Klick vorne öffnet die Temperatur und ändert nichts");
-  expect(currentTempTargetDegC == before, "Heizung läuft weiter, während die Temperatur offen ist");
-  click(true);
-  expect(setPoint() == 350, "320: Klick vorne springt zum nächsten Lot, 350");
+  expect(setPoint() == 350, "320: Klick vorne sofort aufs nächste Lot, 350");
+  expect(currentTempTargetDegC == 350, "Heizung folgt sofort, ohne Bestätigen");
+  expectMode(OperatingMode::Soldering, "keine Temperatur-Ansicht dazwischen");
   click(true);
   expect(setPoint() == 370, "noch ein Klick: 370");
   click(false);
-  expect(setPoint() == 350, "Klick hinten springt zurück: 350");
+  expect(setPoint() == 350, "Klick hinten: ein Lot kälter, 350");
   expect(currentTempTargetDegC == 350, "Heizung folgt dem neuen Sollwert");
   click(false);
   click(false);
   expect(setPoint() == 240, "zwei Klicks hinten: 320, dann 240");
   click(false);
-  expect(setPoint() == 240, "unten bleibt es bei 240");
+  expect(setPoint() == 240, "unten bleibt es bei 240, kein Umspringen");
   click(true);
   click(true);
   click(true);
   click(true);
   expect(setPoint() == 400, "vier Klicks vorne: 400");
   click(true);
-  expect(setPoint() == 400, "oben bleibt es bei 400");
-  hold(true, 3000);
-  expect(setPoint() == 240, "Halten vorne: ein Preset weiter, von 400 herum auf 240");
-  hold(false, 1000);
-  expectMode(OperatingMode::Soldering, "Halten hinten schließt die Temperatur, das Löten läuft weiter");
+  expect(setPoint() == 400, "oben bleibt es bei 400, kein Umspringen");
   setSettingValue(SettingsOptions::SolderingTemp, 335);
-  click(false);
-  expect(setPoint() == 335, "Klick hinten beim Löten öffnet die Temperatur und ändert nichts");
   click(true);
   expect(setPoint() == 350, "eigener Wert 335: Klick vorne auf das nächsthöhere Lot");
   setSettingValue(SettingsOptions::SolderingTemp, 335);
   click(false);
   expect(setPoint() == 320, "eigener Wert 335: Klick hinten auf das nächsttiefere Lot");
-  idle(2500);
-  const uint16_t afterClose = setPoint();
-  click(false);
-  expect(setPoint() == afterClose, "die Temperatur schließt nach 2 s von selbst");
   idle(2500);
 
   puts("== Boost");
@@ -241,8 +230,7 @@ int main() {
   expect(setPoint() == 320, "Klicks kurz nach dem Boost ändern nichts");
   idle(800);
   click(true);
-  click(true);
-  expect(setPoint() == 350, "später öffnet ein Klick wieder die Anzeige und der zweite springt");
+  expect(setPoint() == 350, "später wechselt ein Klick wieder das Lot");
   idle(2500);
   setSettingValue(SettingsOptions::SolderingTemp, 320);
 
@@ -339,10 +327,6 @@ int main() {
   expect(getSettingValue(SettingsOptions::OLEDInversion) == inverted, "nochmal Klick schaltet zurück");
   click(false);
   click(false);
-  click(false); // Start mit Hund
-  click(true);
-  expect(getSettingValue(SettingsOptions::DogHomeVariant) == 1, "Menü: Start mit Hund schaltet");
-  click(true);
   click(false); // Detailansicht
   click(true);
   expect(getSettingValue(SettingsOptions::DogSolderView) == 1, "Menü: Detailansicht schaltet");
@@ -377,8 +361,7 @@ int main() {
   click(false);
   idle(100);
   expectMode(OperatingMode::Soldering, "Klick hinten weckt");
-  click(false);
-  expect(setPoint() == sleepSet, "der Klick nach dem Wecken öffnet die Temperatur, der weckende tat nichts");
+  expect(setPoint() == sleepSet, "der weckende Klick wechselt das Lot nicht");
   idle(2500);
   toSleep();
   click(true);

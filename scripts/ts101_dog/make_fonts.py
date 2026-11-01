@@ -11,7 +11,7 @@ THRESHOLD = 120  # coverage that turns into a lit pixel
 
 DIGITS = '0123456789'
 UPPER = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ' + DIGITS + '.:/-+!%°'
-SMALL = UPPER + ',()~?·' + 'ÄÖÜ' + 'Solet' + 's'
+SMALL = UPPER + ',()~?·' + 'ÄÖÜ' + 'Solet' + 's' + 'nuibax'  # the lower case is for the alloys: SnBi, SnPb, Max
 # name: (ttf, size, characters, pages, row of the baseline inside the glyph)
 FONTS = {
     'Big':   ('BarlowCondensed-SemiBold.ttf', 28, DIGITS, 3, 22),  # the large temperature
@@ -30,9 +30,16 @@ def ironos_small():
 def label_font():
     """Mixed-case labels, from fonts/label8x10.txt"""
     lines = [l.rstrip('\n') for l in open(os.path.join(HERE, 'fonts', 'label8x10.txt'), encoding='utf8') if not l.startswith('# ')]
-    glyphs = {' ': (set(), 8)}
+    glyphs = {' ': (set(), 3)}
     for i in range(0, len(lines), 14):
-        glyphs[lines[i]] = ({(x, y - 10) for y, row in enumerate(lines[i + 1:i + 14]) for x, c in enumerate(row) if c == '#'}, 9 if lines[i] == 'M' else 8)
+        char = lines[i]
+        pixels = {(x, y - 10) for y, row in enumerate(lines[i + 1:i + 14]) for x, c in enumerate(row) if c == '#'}
+        if char in DIGITS + '°':
+            glyphs[char] = (pixels, 8)  # the digits keep their cells: the screens place them one by one
+            continue
+        left = min(x for x, _ in pixels)  # letters are proportional: no empty columns in front, 1 px gap behind
+        pixels = {(x - left, y) for x, y in pixels}
+        glyphs[char] = (pixels, max(x for x, _ in pixels) + 2)
     return glyphs, 2, 10
 
 def render(font, char):
