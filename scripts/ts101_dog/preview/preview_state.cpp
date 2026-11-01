@@ -309,6 +309,25 @@ static void solderScene(uint16_t tip, uint16_t set, Series kind, uint32_t change
   ui_draw_soldering_basic_status(false);
 }
 
+// A weak supply: the curve is full long before the set point. Rises from 25 C to this temperature over 93 samples
+static void slowHeatScene(uint16_t now, int frame) {
+  limitX10 = 300;
+  dogCurveReset();
+  const uint32_t end = previewTicks;
+  for (int i = 0; i < 93; i++) {
+    previewTicks = end - (92 - i) * 250;
+    dogCurveSample(25 + (now - 25) * i / 92, 250);
+  }
+  x10WattHistory.sum = 300;
+  for (int i = 0; i <= frame; i++) { // the legs run on the time
+    previewTicks = end - (frame - i) * 110;
+    ui_draw_soldering_basic_status(false);
+    OLED::clearScreen();
+  }
+  previewTicks = end;
+  ui_draw_soldering_basic_status(false);
+}
+
 static void boostScene(uint8_t secondsLeft) {
   limitX10 = 650;
   settings[SettingsOptions::BoostTemp] = 420;
@@ -340,6 +359,13 @@ std::vector<PreviewScene> previewScenes() {
       {"k2_heizt_start", T, 41, 350, 650, 201, false, [] { heatingScene(41, 650, 0); }},
       {"k3_heizt_fast_da", T, 338, 350, 210, 201, false, [] { heatingScene(338, 210, 0); }},
       {"k4_heizt_gedreht", T, 205, 350, 650, 201, false, [] { orient(false); heatingScene(205, 650, 0); }},
+      {"k6_lang_mitte", T, 200, 350, 300, 201, false, [] { slowHeatScene(200, 0); }},
+      {"k6_lang_mitte_bild1", T, 200, 350, 300, 201, false, [] { slowHeatScene(200, 1); }},
+      {"k7_lang_fast_da", T, 338, 350, 300, 201, false, [] { slowHeatScene(338, 0); }},
+      {"k7_lang_fast_da_bild1", T, 338, 350, 300, 201, false, [] { slowHeatScene(338, 1); }},
+      {"k8_lang_gedreht", T, 338, 350, 300, 201, false, [] { orient(false); slowHeatScene(338, 0); }},
+      {"k9_kurz_am_ziel", T, 340, 350, 650, 201, false, [] { heatingScene(340, 650, 0); }},
+      {"k9_kurz_am_ziel_100w", T, 340, 350, 1000, 201, false, [] { heatingScene(340, 1000, 0); }},
       {"k5_heizt_plus_gedrueckt", T, 205, 350, 650, 201, false, [] { pressed(true, 100); heatingScene(205, 650, 0); }},
       // Soldering: no dog, the solder's name, clicks change it at once
       {"l1_bereit_350", T, 350, 350, 90, 201, false, [] { solderScene(350, 350, Series::Set350, 0); }},

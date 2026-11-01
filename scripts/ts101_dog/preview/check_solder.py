@@ -55,6 +55,20 @@ img = load('l2_plus_370_heizt')
 set_row = min(y for x, y in area(img, 0, 92, 19, 31))
 check(area(img, 0, 92, set_row, set_row) == {(x, set_row) for x in range(0, 93, 3)}, f'after + the dotted set line jumps to the new set point (row {set_row}), every 3rd pixel')
 
+# Heating: the dog keeps clear of everything around it, on every leg frame and however far the curve has come
+HEATING = ('k1_heizt_65w', 'k1_heizt_65w_bild1', 'k1_heizt_65w_bild2', 'k1_heizt_65w_bild3', 'k2_heizt_start', 'k3_heizt_fast_da', 'k6_lang_mitte', 'k6_lang_mitte_bild1', 'k7_lang_fast_da', 'k7_lang_fast_da_bild1', 'k9_kurz_am_ziel', 'k9_kurz_am_ziel_100w')
+for name in HEATING:
+    img = load(name)
+    check(not area(img, 0, 86, 7, 7), f'{name}: row 7 free between the power row and the dog')
+    check(not area(img, 87, 87, 0, 18), f'{name}: column 87 free before the arrow and ZIEL')
+    check(not area(img, 93, 95, 17, 31), f'{name}: columns 93-95 free before the boxes')
+    check(area(img, 96, 127, 17, 31) == minus_plus, f'{name}: the boxes untouched')
+for a_name, b_name in (('k6_lang_mitte', 'k6_lang_mitte_bild1'), ('k7_lang_fast_da', 'k7_lang_fast_da_bild1')):
+    check(area(load(a_name), 88, 127, 0, 16) == area(load(b_name), 88, 127, 0, 16), f'{a_name}: the temperature block is the same with other legs')
+turned = load('k8_lang_gedreht')
+check(not area(turned, 35, 127, 7, 7), 'turned: row 7 free')
+check(max(x for x, y in area(turned, 35, 127, 8, 18)) <= 35 + 86, 'turned: the nose ends at the same place in the stage')
+
 boost = load('b1_boost')
 check(len(area(boost, 0, 39, 0, 9)) > 300, 'boost: inverted badge at the top left')
 ground = [area(load(n), 0, 92, 31, 31) for n in ('b1_boost', 'b1_boost_bild1', 'b1_boost_bild2')]

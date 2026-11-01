@@ -136,12 +136,15 @@ static const uint8_t *trotFrame(uint32_t fpsX10) {
   return frames[phase / (10 * TICKS_SECOND)];
 }
 
+#define DOG_GROUND_MIN 21 // the dog is 13 rows tall and the row with the watts ends on row 6
+#define DOG_FRONT_MAX  79 // its nose is 7 columns ahead of the front paw and has to stop before x=87: the arrow and ZIEL start there
 // The dog 24x13, its columns shifted down by rowAt(column): it leans with the ground under it
 static void drawTrot(int16_t x, const uint8_t *frame, int16_t yBack, int16_t yFront) {
   for (uint8_t col = 0; col < 24; col++) {
     // the paws are on columns 3 and 16; between and beyond them the line through both
     const int16_t num    = (yFront - yBack) * (col - 3);
-    const int16_t ground = yBack + (num + (num < 0 ? -6 : 6)) / 13;
+    int16_t       ground = yBack + (num + (num < 0 ? -6 : 6)) / 13;
+    ground               = ground < DOG_GROUND_MIN ? DOG_GROUND_MIN : ground; // the head stays under the power row
     for (uint8_t row = 0; row < 13; row++) {
       const int16_t px = x + col, py = ground - 13 + row;
       if (((frame[(row / 8) * 24 + col] >> (row % 8)) & 1) && px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT) {
@@ -167,8 +170,9 @@ static void drawHeatingScreen() {
   dogSmall(x0, text, 7);
   uint8_t       rows[STAGE_WIDTH];
   const uint8_t count = dogDrawCurve(x0, STAGE_WIDTH, CURVE_TOP, CURVE_BOTTOM, currentTempTargetDegC, rows);
-  // The dog runs at the newest end of the curve, uphill; at the start it waits at the left end
-  const int16_t front = count > 17 ? count - 1 : 16; // column of the front paw, in samples
+  // The dog runs at the newest end of the curve, uphill; at the start it waits at the left end, and once it reaches the temperature
+  // block it stays there and the curve goes on under it
+  const int16_t front = count > DOG_FRONT_MAX ? DOG_FRONT_MAX : (count > 17 ? count - 1 : 16); // column of the front paw, in samples
   auto          rowAt = [&](int16_t i) -> int16_t { return count == 0 ? CURVE_BOTTOM : rows[i < 0 ? 0 : (i >= count ? count - 1 : i)]; };
   int16_t       yBack = rowAt(front - 13), yFront = rowAt(front);
   yFront              = yFront < yBack - 12 ? yBack - 12 : yFront; // at most 45 degrees

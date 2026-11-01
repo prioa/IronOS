@@ -36,7 +36,7 @@ into reference images for `preview/compare.py`.
 - **Lock**: holding both buttons on Start switches it on or off for the sessions that follow, with a notice. With `Sperre` on Aus in the
   menu the gesture locks nothing and the notice says so; setting `Sperre` to Aus also drops an armed lock. To unlock: both buttons stop,
   then the same gesture on Start.
-- **Heating**: the running dog on the curve, until the set point is reached the first time, and again after sleep.
+- **Heating**: the running dog on the curve, until the set point is reached the first time, and again after sleep. Its nose stops before the temperature block and its head stays under the power row; the curve goes on under it.
 - **Soldering**: the solder's name, watts and amps, or for 2 s after a change its temperature, alloy and position; the real tip temperature
   with an arrow at 2 degrees off, `ZIEL` or `BEREIT` below it, the curve with its dotted set line and the - and + boxes. No dog, also when
   heating up after a change of solder. A set point that is no solder shows as `Eigenes Ziel`. Holding the rear button shows `Halten: Stopp`.
