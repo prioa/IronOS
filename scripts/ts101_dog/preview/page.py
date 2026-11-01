@@ -6,15 +6,14 @@ from PIL import Image, ImageChops
 rendered, boards, out = sys.argv[1:4]
 BOARDS = [
     ('Detail, stop, temperature, sleep', [('g_detail', 'Detail view', 'Menu switch DETAILANSICHT'), ('g_stopp', 'Stop, rear held', ''), ('g_schlaf', 'Sleep', '')]),
-    ('Menu', [('g_menu', 'Section Schlaf', ''), ('g_wert', 'Value being changed', '')]),
 ]
 OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter', 'Start, cooling'), ('h2_links20', 'Start, tilted left'), ('h4_spitze_unten', 'Start, tip down'), ('h5_geschuettelt_0', 'Start, shaken'),
          ('k1_heizt_65w', 'Heating at 65 W'), ('k3_heizt_fast_da', 'Heating, nearly there'), ('k4_heizt_gedreht', 'Heating, turned'), ('l1_bereit_350', 'Soldering, ready 350°'), ('l2_plus_370_heizt', 'After +: 370°, heating'),
          ('l3_bereit_370', 'Ready 370°'), ('l4_minus_350_kuehlt', 'After −: cooling'), ('l5_platine_bleifrei_heizt', 'Longest name'), ('l10_gedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('r5_schlaf_gedreht', 'Sleep, turned'), ('r6_stopp_gedreht', 'Stop, turned'), 
          ('s4_druck', 'Front pressed'), ('s5_halten', 'Front held'), ('z2_schlaf_aus', 'Sleep, auto-off disabled'),
-         ('i1_strom', 'Info 1/5'), ('i4_statistik', 'Info 4/5, total time'), ('m2_menu_info', 'Menu root'), ('m10_hilfe', 'Help text after 3 s'), ('m14_anzeige_schalter', 'Switches'), ('m9_halten', 'Rear held in the menu'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
-TABLE = [('Start', 'Solder', 'Menu', 'Nothing', '*Info'), ('Soldering', 'One solder hotter', '*One solder colder', '*Boost, 30 s at most', '*Stop after 0.5 s'),
-         ('Menu list', '*Open or change', '*Next row', '*Nothing', 'Back'), ('Value', '+', '*−', 'Faster +', 'Done'), ('Info', 'Next page', '*Previous page', 'On System: debug', 'Back'), ('Sleep', 'Wake', 'Wake', 'Wake', '*Heater off, to Start')]
+         ('m01_ziel', 'Menu, a number'), ('m02_ziel_aendern', 'Changing it'), ('m03_loeten', 'A section'), ('m06_sperre_alles', 'A choice'), ('m40_info_strom', 'Info'), ('m52_gedreht', 'Menu, turned'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
+TABLE = [('Start', 'Solder', 'Menu', 'Nothing', 'Nothing'), ('Soldering', 'One solder hotter', '*One solder colder', '*Boost, 30 s at most', '*Stop after 0.5 s'),
+         ('Menu', '*Open, next value, or change', '*Next entry', '*Nothing', 'Back'), ('Number', '+', '*−', 'Faster +', 'Done'), ('Sleep', 'Wake', 'Wake', 'Wake', '*Heater off, to Start')]
 CHOICES = ['Lock: hold both buttons on Start to switch it on or off. The SPERRE menu entry must not be off. To unlock: both buttons stop, then the same gesture on Start.',
            'A set point that is no preset shows Soll on Start. Presets read SnBi, Bleilot, Bleifrei, SnCu, Masse.',
            'Clicks change the solder at once while soldering, no view in between, nothing at the ends. There is no Temperature view any more.',

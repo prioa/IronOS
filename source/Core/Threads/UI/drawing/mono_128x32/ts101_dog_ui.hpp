@@ -52,16 +52,12 @@ void    dogBigRight(int16_t x1, uint16_t value);
 void dogKeyBox(uint8_t x, bool front, const uint8_t *icon, uint8_t iconX, uint8_t iconY, uint8_t width, uint8_t height);
 void dogKeyPair(uint8_t x, const uint8_t *front, const uint8_t *rear);
 
-// ---- Key row (rows 23-31): each label stays next to its button, wherever the orientation puts it ----
-struct DogKey {
-  const uint8_t *icon;
-  const char    *text;
-};
+// ---- Holding a button ----
 #define DOG_HOLD_START (TICKS_100MS * 3 / 2) // shorter presses only invert the field; the bar starts after this
 #define DOG_HOLD_FULL  (TICKS_100MS * 6)     // the bar is full and the action fires
 #define DOG_HOLD_STOP  (TICKS_SECOND / 2)    // the same for switching the heater off
 #define DOG_BOOST_MAX  (TICKS_SECOND * 30)   // boost ends by itself after this, even with the button still down
-#define DOG_VALUE_TIMEOUT (TICKS_SECOND * 9 / 2) // the value in the menu saves itself after this long without a button
+#define DOG_VALUE_TIMEOUT (TICKS_SECOND * 2) // the value in the menu closes itself after this long without a button
 
 // Once per frame, follows the buttons themselves (getButtonA/getButtonB); hides the events of a consumed press
 ButtonState dogButtonsPoll(ButtonState buttons);
@@ -71,22 +67,19 @@ bool       dogPressed(bool front);          // down on its own, and not left ove
 TickType_t dogHeldTicks(bool front);        // how long it has been down, 0 if not dogPressed
 void       dogPressConsumed();              // the press did its job: it counts for nothing more until released
 void       dogSetLocked(bool locked);       // button lock: no field inverts and no bar fills
-void       dogDrawKeys(DogKey front, DogKey rear, const char *centre);       // words and icons, inverted while pressed
-#define DOG_KEY_ROW 24 // the key row; the menu puts its keys in the top row (0) instead
-// While held long enough, replaces the key row: text with a bar filling from the button's side. True if it drew
-bool       dogDrawHold(const char *text, bool front, TickType_t full, uint8_t row = DOG_KEY_ROW);
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
-// The settings menu, drawn on its own for the preview
+// The settings menu, drawn on its own for the preview. Sections: 0 the top level, 1 solder, 2 sleep, 3 display, 4 info
 void dogDrawMenuList(uint8_t section, uint8_t pos);
 void dogDrawMenuValue(uint8_t section, uint8_t pos);
-#define DOG_MENU_ROOT 0xFF
+void dogMenuBlink(); // the value just changed: it inverts once
+#define DOG_MENU_SECTION_INFO 4
 
 const char *dogTipName(); // the tip type picked in the menu, in the small font
 
-// The info pages (menu -> info); page 4 leads on to the raw debug values
+// The two rows of an info page (menu -> info); the last page leads on to the raw debug values
 #define DOG_INFO_PAGES 5
-void dogDrawInfoPage(uint8_t page);
+void dogDrawInfoRows(uint8_t page);
 
 // ---- The solders: a click while soldering moves one up or down, nothing at the ends ----
 void   dogJumpPreset(bool up);

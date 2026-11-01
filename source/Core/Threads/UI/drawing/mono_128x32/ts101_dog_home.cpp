@@ -385,6 +385,5 @@ void dogDrawHome(uint16_t shownTemperature) {
   drawTemperature(normal() ? OLED_WIDTH - 1 : 33, shownTemperature, blank);
   drawHistory(x0);
   drawButtonPair();
-  dogDrawHold(DOG_T("HALTEN: INFO", "HOLD: INFO"), false, DOG_HOLD_FULL);
 }
 #endif

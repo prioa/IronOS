@@ -35,7 +35,7 @@ def label_font():
         char = lines[i]
         pixels = {(x, y - 10) for y, row in enumerate(lines[i + 1:i + 14]) for x, c in enumerate(row) if c == '#'}
         if char in DIGITS + '°':
-            glyphs[char] = (pixels, 8)  # the digits keep their cells: the screens place them one by one
+            glyphs[char] = (pixels, 7)  # the digits keep their cells; they are 6 wide
             continue
         left = min(x for x, _ in pixels)  # letters are proportional: no empty columns in front, 1 px gap behind
         pixels = {(x - left, y) for x, y in pixels}

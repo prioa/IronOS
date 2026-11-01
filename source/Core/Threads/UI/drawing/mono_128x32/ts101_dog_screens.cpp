@@ -241,7 +241,7 @@ static void drawSolderingScreen() {
   const int16_t  x0     = stageX();
   const int8_t   solder = dogPresetIndex();
   const uint16_t tip = getTipTemp(), set = setPoint();
-  dogText(dogFontLabel, x0, 10, solder < 0 ? DOG_T("Manuell", "Manual") : (dogLangDE() ? SOLDERS[solder].de : SOLDERS[solder].en));
+  dogText(dogFontLabel, x0, 10, solder < 0 ? DOG_T("Eigenes Ziel", "Own target") : (dogLangDE() ? SOLDERS[solder].de : SOLDERS[solder].en));
   char text[16];
   if (dogLotChangedAt && xTaskGetTickCount() - dogLotChangedAt < TICKS_SECOND * 2) {
     formatUnit(text, set, "° ");
@@ -402,13 +402,12 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
 }
 
 /*
- * The info pages: a heading with the page number, two lines of label and value, and the key row
+ * An info page in the menu: two rows of label and value, the second one short of the button boxes
  */
-void dogDrawInfoPage(uint8_t page) {
-  static const char *const titles[DOG_INFO_PAGES][2] = {{"STROM", "POWER"}, {"SPITZE", "TIP"}, {"GRIFF + LAGE", "GRIP + SIDE"}, {"STATISTIK", "STATISTICS"}, {"SYSTEM", "SYSTEM"}};
-  char                     left[14], right[14];
-  const char              *label1 = "", *label2 = "";
-  const char              *value1 = right, *value2 = left;
+void dogDrawInfoRows(uint8_t page) {
+  char        left[14], right[14];
+  const char *label1 = "", *label2 = "";
+  const char *value1 = right, *value2 = left;
   switch (page) {
   case 0: {
     const int8_t source = getPowerSourceNumber();
@@ -416,12 +415,12 @@ void dogDrawInfoPage(uint8_t page) {
     label2              = DOG_T("GRENZE", "LIMIT");
     formatX10(right, getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0), 'V');
     const int32_t limit = getX10WattageLimits();
-    formatUnit(left, limit > 0 ? limit / 10 : 0, "W");
+    formatUnit(left, limit > 0 ? limit / 10 : 0, " W");
     break;
   }
   case 1: {
     label1 = DOG_T("TYP", "TYPE");
-    label2 = DOG_T("WIDERSTAND", "RESISTANCE");
+    label2 = DOG_T("WIDERST.", "RESIST.");
     value1 = dogTipName();
     char *end = dogFormat(left, getTipResistanceX10() / 10);
     *end++    = '.';
@@ -456,19 +455,12 @@ void dogDrawInfoPage(uint8_t page) {
     value2 = "";
     break;
   }
-  dogSmall(0, titles[page][dogLangDE() ? 0 : 1], 7);
-  char number[6];
-  char *end = dogFormat(number, page + 1);
-  *end++    = '/';
-  dogFormat(end, DOG_INFO_PAGES);
-  dogSmallRight(OLED_WIDTH - 1, number, 7);
-  dogSmall(0, label1, 15);
-  dogSmallRight(OLED_WIDTH - 1, value1, 15);
-  dogSmall(0, label2, 23);
-  dogSmallRight(OLED_WIDTH - 1, value2, 23);
-  if (dogDrawHold(DOG_T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL) || (page == DOG_INFO_PAGES - 1 && dogDrawHold(DOG_T("HALTEN: DEBUG", "HOLD: DEBUG"), true, DOG_HOLD_FULL))) {
-    return;
+  const int16_t x0 = normal() ? 0 : 35;
+  if (dogTextWidth(dogFontSmall, value1) + dogTextWidth(dogFontSmall, label1) + 6 <= OLED_WIDTH) {
+    dogSmall(0, label1, 15); // a long development version takes the whole row
   }
-  dogDrawKeys({iconNext, DOG_T("WEITER", "NEXT")}, {iconBack, DOG_T("VORIGE", "PREV")}, nullptr);
+  dogSmallRight(OLED_WIDTH - 1, value1, 15);
+  dogSmall(x0, label2, 23);
+  dogSmallRight(normal() ? 94 : OLED_WIDTH - 1, value2, 23);
 }
 #endif

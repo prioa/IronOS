@@ -21,16 +21,13 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
     }
     return OperatingMode::HomeScreen;
   }
-  if (buttons == BUTTON_BOTH_LONG && getSettingValue(SettingsOptions::LockingMode)) {
+  if (buttons == BUTTON_BOTH_LONG) {
     dogPressConsumed(); // once per press; while soldering both buttons stop instead, so the lock is switched here
-    dogLockArmed    = !dogLockArmed;
+    if (getSettingValue(SettingsOptions::LockingMode)) {
+      dogLockArmed = !dogLockArmed;
+    } // with SPERRE on Aus the notice says that, instead of the gesture doing nothing
     lockNoticeUntil = xTaskGetTickCount() + TICKS_SECOND * 3 / 2;
     return OperatingMode::HomeScreen;
-  }
-  if (dogHoldDone(false, DOG_HOLD_FULL)) {
-    dogPressConsumed();
-    cxt->transitionMode = TransitionAnimation::Left;
-    return OperatingMode::DebugMenuReadout;
   }
   switch (buttons) {
   case BUTTON_F_SHORT:
@@ -118,7 +115,11 @@ OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
 #ifdef TS101_DOG_UI
   dogSetLocked(false);
   if (xTaskGetTickCount() < lockNoticeUntil) {
-    dogWarnLocked(dogLockArmed, BUTTON_NONE);
+    if (getSettingValue(SettingsOptions::LockingMode)) {
+      dogWarnLocked(dogLockArmed, BUTTON_NONE);
+    } else {
+      dogDrawNotice(iconLock, DOG_T("AUS", "OFF"), DOG_T("SPERRE IM MENÜ AUS", "LOCK OFF IN THE MENU"));
+    }
   } else {
     ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
   }

@@ -31,6 +31,10 @@ void              setSettingValue(const enum SettingsOptions option, const uint1
 void              saveSettings() {}
 // Wraps like the real one for the two-state settings the menu shows as switches; others only count up
 void nextSettingValue(const enum SettingsOptions o) {
+  if (o == SettingsOptions::LockingMode) { // the same for the lock's three values
+    settings[o] = (settings[o] + 1) % 3;
+    return;
+  }
   const bool twoStates = o == SettingsOptions::OLEDInversion || o == SettingsOptions::TemperatureInF || o == SettingsOptions::ReverseButtonTempChangeEnabled || o == SettingsOptions::CalibrateCJC || o == SettingsOptions::DogSolderView;
   settings[o]          = (twoStates && settings[o] >= 1) ? 0 : settings[o] + 1;
 }
@@ -107,6 +111,7 @@ void previewApply(const PreviewScene &s) {
   settings[SettingsOptions::SleepTemp]          = 150;
   settings[SettingsOptions::TempChangeLongStep] = 10;
   settings[SettingsOptions::ShutdownTime]       = 10;
+  settings[SettingsOptions::OLEDBrightness]     = 26;
   tipC                                         = s.tipC;
   settings[SettingsOptions::SolderingTemp]     = s.setC;
   currentTempTargetDegC                        = s.setC;
@@ -307,7 +312,6 @@ static void boostScene(uint8_t secondsLeft) {
 
 std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 200000; // a time well away from the occasional wag
-  const DogKey solderKey = {iconPlay8, "LÖTEN"}, menuKey = {iconMenu, "MENÜ"};
   return {
       // The home screen: H0 is on the statistics' first phase, each phase lasts 2 s
 #define H0 6000000
@@ -382,8 +386,6 @@ std::vector<PreviewScene> previewScenes() {
       {"g_detail", T, 318, 350, 580, 201, false, [] { limitX10 = 650; atTemp(199); ui_draw_soldering_power_status(false); }},
       {"g_stopp", T, 350, 350, 90, 201, false, [] { limitX10 = 650; atTemp(199); pressed(false, 150 + 191); ui_draw_soldering_basic_status(false); }},
       {"g_schlaf", 6000000 + 162000, 150, 350, 0, 201, false, [] { dogSleepEnterTime = previewTicks - 161000; lastMovementTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
-      {"g_menu", T, 26, 350, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; settings[SettingsOptions::SleepTemp] = 150; dogDrawMenuList(2, 1); }},
-      {"g_wert", T, 26, 350, 0, 201, false, [] { lastButtonTime = previewTicks - 1800; settings[SettingsOptions::SleepTime] = 11; dogDrawMenuValue(2, 1); }},
       // Other states, no board
       {"s4_druck", 6000000 + 3000, 26, 335, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(0); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
       {"s5_halten", 6000000 + 3000, 26, 335, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(0); pressed(true, 150 + 270); ui_draw_homescreen_simplified(26); }},
@@ -391,29 +393,58 @@ std::vector<PreviewScene> previewScenes() {
       {"r5_schlaf_gedreht", 6000000 + 162000, 150, 350, 0, 201, false, [] { orient(false); dogSleepEnterTime = previewTicks - 161000; lastMovementTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
       {"r6_stopp_gedreht", T, 350, 350, 90, 201, false, [] { orient(false); limitX10 = 650; atTemp(199); pressed(false, 150 + 191); ui_draw_soldering_basic_status(false); }},
       {"z2_schlaf_aus", 6000000 + 162000, 150, 350, 0, 201, false, [] { settings[SettingsOptions::ShutdownTime] = 0; dogSleepEnterTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
-      {"i1_strom", T, 26, 320, 0, 201, false, [] { limitX10 = 900; dogDrawInfoPage(0); }},
-      {"i2_spitze", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(1); }},
-      {"i3_griff", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(2); }},
-      {"i4_statistik", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(3); }},
-      {"i5_system", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(4); }},
+      // The menu (sections: 0 top level, 1 solder, 2 sleep, 3 display, 4 info)
+      {"m01_ziel", T, 26, 335, 0, 201, false, [] { dogDrawMenuList(0, 0); }},
+      {"m02_ziel_aendern", T, 26, 335, 0, 201, false, [] { dogDrawMenuValue(0, 0); }},
+      {"m03_loeten", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(0, 1); }},
+      {"m04_schlaf", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(0, 2); }},
+      {"m05_anzeige", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(0, 3); }},
+      {"m06_sperre_aus", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::LockingMode] = 0; dogDrawMenuList(0, 4); }},
+      {"m06_sperre_alles", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::LockingMode] = 2; dogDrawMenuList(0, 4); settings[SettingsOptions::LockingMode] = 0; }},
+      {"m06_sperre_blinkt", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::LockingMode] = 1; dogMenuBlink(); dogDrawMenuList(0, 4); settings[SettingsOptions::LockingMode] = 0; }},
+      {"m07_info", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(0, 5); }},
+      {"m08_zuruecksetzen", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(0, 6); }},
+      {"m10_boost_ziel", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(1, 0); }},
+      {"m11_boost_aendern", T, 26, 320, 0, 201, false, [] { dogDrawMenuValue(1, 0); }},
+      {"m12_autostart", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::AutoStartMode] = 2; dogDrawMenuList(1, 1); settings[SettingsOptions::AutoStartMode] = 0; }},
+      {"m13_spitze", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::SolderingTipType] = 3; dogDrawMenuList(1, 2); }},
+      {"m14_leistung", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::PowerLimit] = 100; dogDrawMenuList(1, 3); settings[SettingsOptions::PowerLimit] = 0; }},
+      {"m15_dc", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::MinDCVoltageCells] = 2; dogDrawMenuList(1, 4); settings[SettingsOptions::MinDCVoltageCells] = 0; }},
+      {"m16_pd_modus", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::USBPDMode] = 1; dogDrawMenuList(1, 5); settings[SettingsOptions::USBPDMode] = 0; }},
+      {"m17_pd_timeout", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::PDNegTimeout] = 20; dogDrawMenuList(1, 6); }},
+      {"m18_keep_awake", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::KeepAwakePulse] = 5; dogDrawMenuList(1, 7); }},
+      {"m19_temp_kalibr", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(1, 8); }},
+      {"m1a_volt_kalibr", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(1, 9); }},
+      {"m20_schlaf_nach", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(2, 0); }},
+      {"m21_schlaf_nach_aendern", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::SleepTime] = 10; dogDrawMenuValue(2, 0); }},
+      {"m22_schlaf_temp", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(2, 1); }},
+      {"m23_aus_nach", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(2, 2); }},
+      {"m24_aus_nach_aendern", T, 26, 320, 0, 201, false, [] { dogDrawMenuValue(2, 2); }},
+      {"m25_bewegung", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(2, 3); }},
+      {"m30_drehung", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::OrientationMode] = 0; dogDrawMenuList(3, 0); settings[SettingsOptions::OrientationMode] = 2; }},
+      {"m31_helligkeit", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::OLEDBrightness] = 51; dogDrawMenuList(3, 1); }},
+      {"m32_invertieren", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(3, 2); }},
+      {"m33_einheit", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(3, 3); }},
+      {"m34_animation", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::AnimationSpeed] = 1; dogDrawMenuList(3, 4); settings[SettingsOptions::AnimationSpeed] = 0; }},
+      {"m35_logo", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::LOGOTime] = 5; dogDrawMenuList(3, 5); }},
+      {"m35_logo_aendern", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::LOGOTime] = 6; dogDrawMenuValue(3, 5); }},
+      {"m36_detail", T, 26, 320, 0, 201, false, [] { settings[SettingsOptions::DogSolderView] = 1; dogDrawMenuList(3, 6); settings[SettingsOptions::DogSolderView] = 0; }},
+      {"m37_tasten", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(3, 7); }},
+      {"m40_info_strom", T, 26, 320, 0, 201, false, [] { limitX10 = 900; dogDrawMenuList(4, 0); }},
+      {"m41_info_spitze", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(4, 1); }},
+      {"m42_info_griff", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(4, 2); }},
+      {"m43_info_statistik", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(4, 3); }},
+      {"m44_info_system", T, 26, 320, 0, 201, false, [] { dogDrawMenuList(4, 4); }},
+      {"m50_hinten_gedrueckt", T, 26, 320, 0, 201, false, [] { pressed(false, 100); dogDrawMenuList(0, 1); }},
+      {"m51_vorne_gedrueckt", T, 26, 320, 0, 201, false, [] { pressed(true, 100); dogDrawMenuList(0, 1); }},
+      {"m52_gedreht", T, 26, 335, 0, 201, false, [] { orient(false); dogDrawMenuList(0, 3); }},
+      {"m53_gedreht_aendern", T, 26, 335, 0, 201, false, [] { orient(false); dogDrawMenuValue(0, 0); }},
+      {"m54_gedreht_info", T, 26, 320, 0, 201, false, [] { orient(false); limitX10 = 900; dogDrawMenuList(4, 0); }},
+      {"w6_sperre_aus_geste", T, 26, 320, 0, 201, false, [] { dogDrawNotice(iconLock, DOG_T("AUS", "OFF"), DOG_T("SPERRE IM MENÜ AUS", "LOCK OFF IN THE MENU")); }},
       {"w1_spitze", T, 26, 320, 0, 201, false, [] { tipMissing = true; ui_draw_homescreen_simplified(26); }},
       {"w2_strom", T, 26, 320, 0, 85, false, [] { dogDrawNotice(iconWarning, "STROM!", "NUR 8.5V AM EINGANG"); }},
       {"w3_heizung", T, 26, 320, 0, 201, false, [] { dogAlert = DogAlert::Thermal; ui_draw_homescreen_simplified(26); dogAlert = DogAlert::None; }},
       {"w4_griff", T, 26, 320, 0, 201, false, [] { handleX10 = 620; dogAlert = DogAlert::Handle; ui_draw_homescreen_simplified(26); dogAlert = DogAlert::None; handleX10 = 310; }},
       {"w5_sperre", T, 26, 320, 0, 201, false, [] { dogWarnLocked(true, BUTTON_NONE); }},
-      // Step 4: the menu (sections: 0 info, 1 solder, 2 sleep, 3 power, 4 display, 5 system)
-            {"m2_menu_info", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(DOG_MENU_ROOT, 0); }},
-      {"m3_menu_schlaf", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(DOG_MENU_ROOT, 2); }},
-      {"m4_item", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(2, 1); }},
-      {"m5_toggle", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(2, 0); }},
-      {"m6_edit", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 600; settings[SettingsOptions::SleepTime] = 11; dogDrawMenuValue(2, 1); }},
-      {"m9_halten", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; pressed(false, 150 + 270); dogDrawMenuList(2, 1); }},
-      {"m10_hilfe", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 5000; settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(2, 1); }},
-      {"m13_vorne_halten", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; pressed(true, 150 + 270); dogDrawMenuList(2, 1); }},
-      {"i6_debug_halten", T, 26, 320, 0, 201, false, [] { pressed(true, 150 + 270); dogDrawInfoPage(4); }},
-      {"m14_anzeige_schalter", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::OLEDBrightness] = 3; settings[SettingsOptions::OrientationMode] = 2; settings[SettingsOptions::AnimationSpeed] = 2; dogDrawMenuList(4, 3); }},
-      {"m15_system", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::KeepAwakePulse] = 5; settings[SettingsOptions::ReverseButtonTempChangeEnabled] = 0; dogDrawMenuList(5, 4); }},
-      {"m16_strom", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::USBPDMode] = 1; settings[SettingsOptions::PDNegTimeout] = 20; settings[SettingsOptions::PowerLimit] = 0; dogDrawMenuList(3, 0); }},
-      {"m11_loeten_spitze", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(1, 3); }},
   };
 }

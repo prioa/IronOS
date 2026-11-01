@@ -3,37 +3,18 @@
 #include "ui_drawing.hpp"
 
 #ifdef TS101_DOG_UI
-// State 1 = info page, state 2 = 1 + debug value while the raw values are showing (behind the last page)
-OperatingMode showInfoPages(const ButtonState buttons, guiContext *cxt) {
-  uint16_t &page  = cxt->scratch_state.state1;
-  uint16_t &debug = cxt->scratch_state.state2;
-  if (debug) {
-    ui_draw_debug_menu(debug - 1);
-    if (buttons == BUTTON_F_SHORT) {
-      debug = debug % 16 + 1;
-    } else if (buttons == BUTTON_B_SHORT) {
-      debug = (debug + 14) % 16 + 1;
-    } else if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
-      dogPressConsumed();
-      debug = 0;
-    }
-    return OperatingMode::DebugMenuReadout;
-  }
-  dogDrawInfoPage(page);
-  if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
+// The raw values behind the last info page. State 1 = which one
+static OperatingMode showRawValues(const ButtonState buttons, guiContext *cxt) {
+  uint16_t &value = cxt->scratch_state.state1;
+  ui_draw_debug_menu(value);
+  if (buttons == BUTTON_F_SHORT) {
+    value = (value + 1) % 16;
+  } else if (buttons == BUTTON_B_SHORT) {
+    value = (value + 15) % 16;
+  } else if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Left;
     return cxt->previousMode;
-  }
-  if (buttons == BUTTON_F_SHORT) {
-    page                = (page + 1) % DOG_INFO_PAGES;
-    cxt->transitionMode = TransitionAnimation::Down;
-  } else if (buttons == BUTTON_B_SHORT) {
-    page                = (page + DOG_INFO_PAGES - 1) % DOG_INFO_PAGES;
-    cxt->transitionMode = TransitionAnimation::Up;
-  } else if (page == DOG_INFO_PAGES - 1 && dogHoldDone(true, DOG_HOLD_FULL)) {
-    dogPressConsumed();
-    debug = 1;
   }
   return OperatingMode::DebugMenuReadout;
 }
@@ -41,7 +22,7 @@ OperatingMode showInfoPages(const ButtonState buttons, guiContext *cxt) {
 
 OperatingMode showDebugMenu(const ButtonState buttons, guiContext *cxt) {
 #ifdef TS101_DOG_UI
-  return showInfoPages(buttons, cxt);
+  return showRawValues(buttons, cxt);
 #endif
 
   ui_draw_debug_menu(cxt->scratch_state.state1);
