@@ -12,7 +12,8 @@ click never changes the heater; both buttons together stop at once while solderi
 |---|---|---|---|---|
 | Start | solder | menu | temperature | info |
 | Soldering | temperature | temperature | boost, 30 s at most | stop after 0.5 s |
-| Temperature | +5° | -5° | next preset | done |
+| Temperature, while soldering | next higher preset | next lower preset | next preset, wrapping round | done |
+| Temperature, from Start or menu | +5° | -5° | next preset, wrapping round | done |
 | Menu list | open or change | next row | nothing | back |
 | Value | + | - | + faster | done |
 | Info | next page | previous page | on System: debug | back |
@@ -25,7 +26,7 @@ into reference images for `preview/compare.py`.
   and the menu, `fonts/label8x10.txt` for the mixed-case labels ("Bleifrei", "Löten"): taken from the boards, with the letters
   they have no sample of drawn in the same style. Barlow SemiBold for the words on full screen notices. `make_fonts.py` turns
   them into `ts101_dog_fonts.h/.cpp`; the licences are in `fonts/` (SIL OFL 1.1).
-- **Start**: the preset's name (or "Soll"), the supply (`PD 20V·65W`, marked with ! when weak), the set point, `Menü` and `Löten`
+- **Start**: the preset's name (or "Soll" for a set point of your own), the supply (`PD 20V·65W`, marked with ! when weak), the set point, `Menü` and `Löten`
   next to their buttons. The menu switch `START MIT HUND` picks the variant with the dog head, which also runs and barks when the
   iron is picked up. While the tip is still hot: a warning triangle, the cooling curve down to a dotted 50 C and the tip.
   The lifetime soldering time is on the Info statistics page.
@@ -37,6 +38,8 @@ into reference images for `preview/compare.py`.
   Holding the rear button shows a block `Halten: Stopp` with a line filling from the rear side.
 - **Detail view** (menu switch `DETAILANSICHT`): source and volts, calculated watts and amps (~), handle, session time.
 - **Boost**: inverted `BOOST`, the target and the seconds left, no dog. It ends after 30 s and needs a fresh press to start again.
+- **Presets** (`TS101_PRESETS_C`): 240 Sn42Bi58, 320 Sn63Pb37 and Sn60Pb40, 350 SAC305, 370 Sn99.3Cu0.7, 400 wires and large copper
+  areas. Starting values for the tip, not datasheet figures: alloys that want the same tip temperature share one step.
 - **Temperature**: `Soll`, the set point, the preset's use, a scale from 100 to 400 C. Closes after 2 s or with rear hold. Clicks right
   after a boost are ignored (upstream #1663). Changes made while soldering are saved on the home screen.
 - **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels. Top row: next-row

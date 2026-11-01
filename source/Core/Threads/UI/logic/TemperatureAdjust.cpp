@@ -3,20 +3,45 @@
 #include "ui_drawing.hpp"
 
 #ifdef TS101_DOG_UI
+#define PRESET_COUNT (sizeof(presetsC) / sizeof(presetsC[0]))
+static const uint16_t presetsC[] = TS101_PRESETS_C;
+static const uint16_t presetsF[] = TS101_PRESETS_F;
+
+static const uint16_t *presets() { return getSettingValue(SettingsOptions::TemperatureInF) ? presetsF : presetsC; }
+
+int8_t dogPresetIndex() {
+  const uint16_t set = getSettingValue(SettingsOptions::SolderingTemp);
+  for (uint8_t i = 0; i < PRESET_COUNT; i++) {
+    if (presets()[i] == set) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// The first preset above the current set point, wrapping round to the lowest: one step, whatever it is now
 static void selectNextPreset() {
-  static const uint16_t presetsC[] = TS101_PRESETS_C;
-  static const uint16_t presetsF[] = TS101_PRESETS_F;
-  const uint16_t       *presets    = getSettingValue(SettingsOptions::TemperatureInF) ? presetsF : presetsC;
-  const uint16_t        current    = getSettingValue(SettingsOptions::SolderingTemp);
-  // The first preset above the current set point, wrapping round to the lowest: one step, whatever it is now
-  uint16_t next = presets[0];
-  for (uint8_t i = 0; i < sizeof(presetsC) / sizeof(presetsC[0]); i++) {
-    if (presets[i] > current) {
-      next = presets[i];
+  const uint16_t current = getSettingValue(SettingsOptions::SolderingTemp);
+  uint16_t       next    = presets()[0];
+  for (uint8_t i = 0; i < PRESET_COUNT; i++) {
+    if (presets()[i] > current) {
+      next = presets()[i];
       break;
     }
   }
   setSettingValue(SettingsOptions::SolderingTemp, next);
+}
+
+// A click while soldering: the next preset in that direction, staying at the ends so a click can't jump from one end to the other
+static void jumpPreset(bool up) {
+  const uint16_t current = getSettingValue(SettingsOptions::SolderingTemp);
+  for (uint8_t i = 0; i < PRESET_COUNT; i++) {
+    const uint16_t candidate = presets()[up ? i : PRESET_COUNT - 1 - i];
+    if (up ? candidate > current : candidate < current) {
+      setSettingValue(SettingsOptions::SolderingTemp, candidate);
+      return;
+    }
+  }
 }
 
 static void stepSetPoint(bool up) {
@@ -32,7 +57,7 @@ static void stepSetPoint(bool up) {
 
 void dogAdjustOpened() { lastButtonTime = xTaskGetTickCount(); }
 
-bool dogAdjustButtons(ButtonState buttons) {
+bool dogAdjustButtons(ButtonState buttons, bool soldering) {
   if (dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     return true;
@@ -44,10 +69,12 @@ bool dogAdjustButtons(ButtonState buttons) {
   }
   switch (buttons) {
   case BUTTON_F_SHORT:
-    stepSetPoint(true);
-    break;
   case BUTTON_B_SHORT:
-    stepSetPoint(false);
+    if (soldering) {
+      jumpPreset(buttons == BUTTON_F_SHORT);
+    } else {
+      stepSetPoint(buttons == BUTTON_F_SHORT);
+    }
     break;
   case BUTTON_BOTH:
     return true;
@@ -61,7 +88,7 @@ bool dogAdjustButtons(ButtonState buttons) {
 OperatingMode gui_solderingTempAdjust(const ButtonState buttons, guiContext *cxt) {
   currentTempTargetDegC = 0;
   dogDrawTemperatureView(false);
-  if (dogAdjustButtons(buttons)) {
+  if (dogAdjustButtons(buttons, false)) {
     saveSettings();
     cxt->transitionMode = TransitionAnimation::Right;
     return cxt->previousMode;

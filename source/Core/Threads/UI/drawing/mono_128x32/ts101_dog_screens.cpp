@@ -304,16 +304,11 @@ void ui_draw_soldering_power_status(bool boostModeOn) {
  *              SAC305
  *   -  ----|----|----|--v-|  +
  */
-static const char *presetUse(uint16_t setC, uint8_t line) {
-  static const uint16_t temps[] = TS101_PRESETS_C;
-  for (uint8_t i = 0; i < sizeof(temps) / sizeof(temps[0]); i++) {
-    if (temps[i] == setC) {
-      static const char *const de[][2] = {{"SMD +", "BLEILOT"}, {"BLEIFREI", "SAC305"}, {"KABEL +", "MASSE"}};
-      static const char *const en[][2] = {{"SMD +", "LEADED"}, {"UNLEADED", "SAC305"}, {"WIRES +", "MASS"}};
-      return (dogLangDE() ? de : en)[i][line];
-    }
-  }
-  return nullptr;
+static const char *presetUse(uint8_t line) {
+  static const char *const de[][2] = {{"NT-LOT", "SN42BI58"}, {"BLEILOT", "SN63PB37"}, {"BLEIFREI", "SAC305"}, {"BLEIFREI", "SNCU0.7"}, {"KABEL +", "MASSE"}};
+  static const char *const en[][2] = {{"LOW TEMP", "SN42BI58"}, {"LEADED", "SN63PB37"}, {"UNLEADED", "SAC305"}, {"UNLEADED", "SNCU0.7"}, {"WIRES +", "MASS"}};
+  const int8_t             preset  = dogPresetIndex();
+  return preset < 0 ? nullptr : (dogLangDE() ? de : en)[preset][line];
 }
 
 void dogDrawTemperatureView(bool heating) {
@@ -323,10 +318,10 @@ void dogDrawTemperatureView(bool heating) {
   dogSmall(0, DOG_T("Soll", "Set"), 10);
   dogBig(25, set);
   const int16_t xMin = 80, xMax = OLED_WIDTH - 1;
-  const char   *use0 = presetUse(setC, 0);
+  const char   *use0 = presetUse(0);
   if (use0) {
     dogSmall(xMin, use0, 9);
-    dogSmall(xMin, presetUse(setC, 1), 18);
+    dogSmall(xMin, presetUse(1), 18);
   } else if (heating) {
     dogDrawCurve(xMin, xMax, 1, 20, setC, DogCurve::Steady, true);
   } else {
@@ -423,14 +418,12 @@ static void drawHeadClipped(int16_t x, const uint8_t *sprite) {
 }
 
 // The preset's name, or "Soll" for a set point of your own
-static const char *presetLabel(uint16_t setC, bool upper) {
-  static const uint16_t temps[] = TS101_PRESETS_C;
-  static const char *const de[] = {"Bleilot", "Bleifrei", "Masse"}, *const en[] = {"Leaded", "Unleaded", "Mass"};
-  static const char *const deUp[] = {"BLEILOT", "BLEIFREI", "MASSE"}, *const enUp[] = {"LEADED", "UNLEADED", "MASS"};
-  for (uint8_t i = 0; i < sizeof(temps) / sizeof(temps[0]); i++) {
-    if (temps[i] == setC) {
-      return upper ? (dogLangDE() ? deUp : enUp)[i] : (dogLangDE() ? de : en)[i];
-    }
+static const char *presetLabel(bool upper) {
+  static const char *const de[] = {"SnBi", "Bleilot", "Bleifrei", "SnCu", "Masse"}, *const en[] = {"SnBi", "Leaded", "Unleaded", "SnCu", "Mass"};
+  static const char *const deUp[] = {"SNBI", "BLEILOT", "BLEIFREI", "SNCU", "MASSE"}, *const enUp[] = {"SNBI", "LEADED", "UNLEADED", "SNCU", "MASS"};
+  const int8_t             preset = dogPresetIndex();
+  if (preset >= 0) {
+    return upper ? (dogLangDE() ? deUp : enUp)[preset] : (dogLangDE() ? de : en)[preset];
   }
   return upper ? DOG_T("SOLL", "SET") : DOG_T("Soll", "Set");
 }
@@ -487,7 +480,6 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
   }
 
   const uint16_t set  = getSettingValue(SettingsOptions::SolderingTemp);
-  const uint16_t setC = getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::convertFtoC(set) : set;
   if (tempOnDisplay) {
     // Still hot: the triangle, the cooling curve down to the dotted 50 °C, and the tip instead of the set point
     const int16_t x0 = stageX();
@@ -508,7 +500,7 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
       const int16_t x = normal() ? 0 : OLED_WIDTH - DOG_HEAD_WIDTH;
       drawHeadClipped(x, bark ? dogHeadBark : dogHead);
       const int16_t textX = normal() ? 35 : 42;
-      dogSmall(textX, presetLabel(setC, true), 10);
+      dogSmall(textX, presetLabel(true), 10);
       char supply[12];
       strcpy(supply, sourceName());
       strcat(supply, " ");
@@ -517,7 +509,7 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
       drawBig(set);
     }
   } else {
-    label(normal() ? 1 : 64, LABEL_BASE, presetLabel(setC, false));
+    label(normal() ? 1 : 64, LABEL_BASE, presetLabel(false));
     char supply[16];
     strcpy(supply, sourceName());
     strcat(supply, " ");

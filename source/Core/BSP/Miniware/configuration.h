@@ -237,8 +237,9 @@
 
 // German Shepherd UI: sleeping dog, 128x32 boot logo, heat-up bar, presets, soldering timer
 #define TS101_DOG_UI 1
-#define TS101_PRESETS_C {300, 350, 400}
-#define TS101_PRESETS_F {570, 660, 750}
+// One per kind of solder, lowest first: Sn42Bi58, Sn63Pb37 or Sn60Pb40, SAC305, Sn99.3Cu0.7, wires and large copper areas
+#define TS101_PRESETS_C {240, 320, 350, 370, 400}
+#define TS101_PRESETS_F {465, 610, 660, 700, 750}
 #define DOG_WEAK_SUPPLY_X10W 300 // 30 W or less counts as a weak supply: said on the screen while heating up and at the start
 #define DOG_HANDLE_LIMIT_X10C 700 // the heater stops and a full screen warning comes up at this handle temperature
 

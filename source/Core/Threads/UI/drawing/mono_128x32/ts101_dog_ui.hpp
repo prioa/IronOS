@@ -86,7 +86,8 @@ void dogDrawInfoPage(uint8_t page);
 
 // ---- Temperature view: changes the set point; while soldering it lives inside the soldering mode, so the heater and every safety check keep running ----
 void dogAdjustOpened();                         // restarts the view for a fresh press
-bool dogAdjustButtons(ButtonState buttons);     // applies the buttons; true when the view should close
+bool dogAdjustButtons(ButtonState buttons, bool soldering); // applies the buttons, clicks jump between presets while soldering; true when the view should close
+int8_t dogPresetIndex();                        // which preset the set point is on, -1 for none
 void dogDrawTemperatureView(bool heating);      // set point, scale, and the curve or the preset's use
 #define DOG_ADJUST_TIMEOUT (TICKS_SECOND * 2)
 #define DOG_BOOST_CLICK_GUARD (TICKS_100MS * 8) // clicks this soon after a boost are ignored (upstream issue #1663)

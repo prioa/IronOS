@@ -46,7 +46,7 @@ static bool boostJustEnded() { return boostEndedAt && (xTaskGetTickCount() - boo
 // Front handles, rear leads: a click only ever opens something or changes the view, never the heater
 static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt) {
   if (cxt->scratch_state.state6 & SCRATCH_ADJUST_OPEN) {
-    if (dogAdjustButtons(buttons)) {
+    if (dogAdjustButtons(buttons, true)) {
       cxt->scratch_state.state6 &= ~SCRATCH_ADJUST_OPEN;
       dogSettingsChanged(); // saved on the home screen: no flash write with the heater on, and it spares the flash
     }
