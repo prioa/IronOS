@@ -243,6 +243,20 @@ static void drawDog(int16_t originX) {
   }
 }
 
+// Asleep: rows 7 and 9 of the two eye gaps filled, only row 8 stays open, and the head (rows 0-13) a pixel lower.
+// Waking: frame 1 opens row 9, frame 2 row 7, frame 3 lifts the head back up
+void dogDrawSleepingDog(int16_t originX, uint8_t wakeFrame) {
+  const uint8_t headDrop = wakeFrame < 3 ? 1 : 0;
+  for (uint8_t y = 0; y < DOG_HOME_SIZE; y++) {
+    const bool lidClosed = (y == 7 && wakeFrame < 2) || (y == 9 && wakeFrame < 1);
+    for (uint8_t x = 0; x < DOG_HOME_SIZE; x++) {
+      if (dogPixel(x, y) || (lidClosed && (x == 6 || x == 9))) {
+        plot(originX + x, y + (y < HEAD_ROWS ? headDrop : 0));
+      }
+    }
+  }
+}
+
 // ---- The buttons: two boxes next to the buttons, so they change sides with the orientation ----
 static void outline(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
   OLED::drawFilledRect(x0, y0, x1, y0, false);

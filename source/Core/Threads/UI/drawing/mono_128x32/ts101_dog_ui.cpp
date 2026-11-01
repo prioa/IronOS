@@ -8,7 +8,7 @@ uint16_t   dogHeatupStartTempC = 0;
 TickType_t dogReachedUntil     = 0;
 TickType_t dogLotChangedAt     = 0;
 bool       dogWokeHeating      = false;
-TickType_t dogSleepEnterTime   = 0;
+uint8_t    dogSleepWakeFrame   = 0;
 uint32_t   dogLastSessionSeconds = 0;
 
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor) {

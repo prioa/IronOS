@@ -88,8 +88,7 @@ static int16_t blockX() { return normal() ? 90 : 0; }
 #define DIGIT_PITCH 7 // the label font's digits are 6 wide
 
 // The real tip temperature in the label font with the ring, the arrow in front of it: >0 up, <0 down
-static void drawTempBlock(uint16_t value, int8_t arrow) {
-  const int16_t x = blockX();
+static void drawTempBlockAt(int16_t x, uint16_t value, int8_t arrow) {
   char          text[6];
   dogFormat(text, value);
   int16_t pen = x + 7;
@@ -102,6 +101,8 @@ static void drawTempBlock(uint16_t value, int8_t arrow) {
     dogBlit(x, 3, 5, 8, arrow > 0 ? dogTrendUp : dogTrendDown);
   }
 }
+
+static void drawTempBlock(uint16_t value, int8_t arrow) { drawTempBlockAt(blockX(), value, arrow); }
 
 // The tiny line under the temperature, right aligned under the ring
 static void drawUnderTemp(const char *text, bool check) {
@@ -333,18 +334,41 @@ void ui_draw_soldering_power_status(bool boostModeOn) {
 }
 
 /*
- * Sleep: the dog lies there awake for a moment, closes its eyes and "z Z Z" drifts up from its head;
- * on the other side the tip temperature and how long until the heater goes off
+ * Sleep: no buttons on this screen, so it stays the same way round when the iron is turned
+ *   dog  z z z  SCHLAF         ^ 150°
+ *               AUS IN 7 MIN
+ *                   BEWEGEN WECKT
+ * Against burning in, the whole content moves sideways every 4 s
  */
-static void drawSleepingDog() {
-  const TickType_t inSleep = xTaskGetTickCount() - dogSleepEnterTime;
-  const int16_t    x       = normal() ? 0 : OLED_WIDTH - DOG_LYING_WIDTH;
-  if (inSleep < TICKS_100MS * 8) {
-    OLED::drawArea(x, 8, DOG_LYING_WIDTH, DOG_LYING_HEIGHT, dogLyingAwake);
-  } else {
-    OLED::drawArea(x, 8, DOG_LYING_WIDTH, DOG_LYING_HEIGHT, dogLying);
-    uint8_t step = (xTaskGetTickCount() / (TICKS_100MS * 6)) % DOG_ZZZ_STEPS;
-    OLED::drawArea(x + 50, 0, DOG_ZZZ_WIDTH, 8, dogZzz[step]);
+#define SLEEP_TEXT_X  44
+#define SLEEP_BLOCK_X 90 // arrow at 90, digits from 97, as while soldering
+#define ZZZ_LOOP      (TICKS_SECOND * 3)
+#define ZZZ_RISE      (TICKS_100MS * 12)
+#define ZZZ_STAGGER   (TICKS_100MS * 6)
+#define ZZZ_END       (TICKS_100MS * 27) // the last 0.3 s of the loop are empty
+
+static void drawZ(int16_t x, int16_t y, uint8_t size) {
+  OLED::drawFilledRect(x, y, x + size - 1, y, false);
+  OLED::drawFilledRect(x, y + size - 1, x + size - 1, y + size - 1, false);
+  for (uint8_t i = 1; i < size - 1; i++) {
+    OLED::drawFilledRect(x + size - 1 - i, y + i, x + size - 1 - i, y + i, false);
+  }
+}
+
+// Three of them rise one after the other, each from 4 px below where it stays
+static void drawZzz(int16_t dx) {
+  static const uint8_t ZX[3] = {17, 23, 30}, ZY[3] = {7, 4, 0};
+  const TickType_t     t     = xTaskGetTickCount() % ZZZ_LOOP;
+  if (t >= ZZZ_END) {
+    return;
+  }
+  for (uint8_t i = 0; i < 3; i++) {
+    const TickType_t start = i * ZZZ_STAGGER;
+    if (t >= start) {
+      const TickType_t age  = t - start;
+      const uint8_t    rise = age >= ZZZ_RISE ? 4 : age * 4 / ZZZ_RISE;
+      drawZ(dx + ZX[i], ZY[i] + 4 - rise, 3 + i);
+    }
   }
 }
 
@@ -354,19 +378,31 @@ static void drawSleepScreen(TemperatureType_t tipTemp) {
     OLED::refresh();
     return;
   }
-  drawSleepingDog();
-  drawBig(tipTemp);
+  static const int8_t SHIFT[4] = {0, -1, -2, -1};
+  const int16_t       dx       = SHIFT[(xTaskGetTickCount() / (TICKS_SECOND * 4)) % 4];
+  dogDrawSleepingDog(2 + dx, dogSleepWakeFrame);
+  if (!dogSleepWakeFrame) {
+    drawZzz(dx);
+  }
+  dogSmall(SLEEP_TEXT_X + dx, DOG_T("SCHLAF", "SLEEP"), 8);
   const uint32_t shutdown = getSettingValue(SettingsOptions::ShutdownTime);
   if (shutdown) {
     const TickType_t last    = lastButtonTime < lastMovementTime ? lastMovementTime : lastButtonTime;
     const TickType_t elapsed = xTaskGetTickCount() - last;
     const TickType_t limit   = shutdown * 60 * TICKS_SECOND;
-    const uint32_t   left    = elapsed < limit ? (limit - elapsed) / TICKS_SECOND : 0;
-    char             text[10];
-    dogFormatTime(text, left / 60, left % 60);
-    dogSmall(normal() ? 79 : 0, DOG_T("AUS", "OFF"), 30);
-    dogSmallRight(normal() ? BIG_RIGHT - 1 : 47, text, 30);
+    const uint32_t   left    = elapsed < limit ? (limit - elapsed + 60 * TICKS_SECOND - 1) / (60 * TICKS_SECOND) : 0; // minutes, rounded up
+    char             text[20];
+    strcpy(text, DOG_T("AUS IN ", "OFF IN "));
+    formatUnit(text + 7, left, " MIN");
+    dogSmall(SLEEP_TEXT_X + dx, text, 18);
   }
+  // The temperature held, with the arrow while it is still on its way there. Hibernating there is no target: no arrow
+  const uint16_t sleepSet = getSettingValue(SettingsOptions::SleepTemp), solderSet = setPoint();
+  const int16_t  held     = sleepSet < solderSet ? sleepSet : solderSet;
+  const int16_t  error    = (int16_t)tipTemp - held;
+  const bool     target   = currentTempTargetDegC != 0;
+  drawTempBlockAt(SLEEP_BLOCK_X + dx, tipTemp, !target || (error > -2 && error < 2) ? 0 : (error < 0 ? 1 : -1));
+  dogSmallRight(OLED_WIDTH - 1 + dx, DOG_T("BEWEGEN WECKT", "MOVE TO WAKE"), 32);
   OLED::refresh();
 }
 

@@ -453,7 +453,7 @@ void dogDrawMenuList(uint8_t section, uint8_t pos) {
     dogDrawInfoRows((uint8_t)item.option);
   } else {
     dogText(dogFontLabel, stageX(), NAME_BASE, nameOf(item));
-    drawValue(item, blinkFrom && xTaskGetTickCount() - blinkFrom < BLINK_TICKS);
+    drawValue(item, blinkFrom && (xTaskGetTickCount() | 1) - blinkFrom < BLINK_TICKS);
   }
   drawNext(section, pos);
   drawBoxes(frontIcon(item), iconKeyDown);

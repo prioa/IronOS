@@ -12,7 +12,7 @@
 extern TickType_t dogSolderTimerStart; // tick the set point was first reached, 0 = still heating up
 extern uint16_t   dogHeatupStartTempC; // tip temperature when heating up started
 extern TickType_t dogReachedUntil;     // the screen stays inverted until this tick: the set point was just reached
-extern TickType_t dogSleepEnterTime;   // when sleep started, for the lie down animation
+extern uint8_t    dogSleepWakeFrame;   // 0 asleep, 1-3 the frames of the dog looking up
 extern uint32_t   dogLastSessionSeconds; // length of the last soldering session, for the home screen
 extern TickType_t dogLotChangedAt;     // a click changed the solder: its temperature and alloy show for 2 s
 extern bool       dogWokeHeating;      // back from sleep and not at the set point yet: the dog runs again
@@ -93,6 +93,7 @@ inline bool       dogLangDE() { return dogLanguageCode[0] == 'D' && dogLanguageC
 
 // ---- Home screen (ts101_dog_home.cpp) ----
 void dogDrawHome(uint16_t shownTemperature); // the temperature as shown, in the unit of the setting
+void dogDrawSleepingDog(int16_t x, uint8_t wakeFrame); // eyes closed and the head a pixel lower; the wake frames open them
 void dogHomeTick();                          // every GUI frame in every mode: the 10 minute curve and the trend arrow
 void dogHomeHistoryReset();
 void dogHomeMotionUpdate();                  // follows the sensor, 8 times a second however often it is called
