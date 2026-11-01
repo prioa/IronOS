@@ -18,15 +18,16 @@ OperatingMode showInfoPages(const ButtonState buttons, guiContext *cxt) {
     return OperatingMode::DebugMenuReadout;
   }
   dogDrawInfoPage(page);
-  if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
+  if (buttons == BUTTON_B_SHORT || buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Left;
     return cxt->previousMode;
   }
-  if (buttons == BUTTON_B_SHORT) {
-    page = (page + 1) % DOG_INFO_PAGES;
+  if (buttons == BUTTON_F_SHORT) {
+    page                = (page + 1) % DOG_INFO_PAGES;
     cxt->transitionMode = TransitionAnimation::Down;
-  } else if (buttons == BUTTON_F_SHORT && page == DOG_INFO_PAGES - 1) {
+  } else if (page == DOG_INFO_PAGES - 1 && dogHoldDone(true, DOG_HOLD_FULL)) {
+    dogPressConsumed();
     debug = 1;
   }
   return OperatingMode::DebugMenuReadout;

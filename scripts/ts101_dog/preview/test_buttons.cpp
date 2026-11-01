@@ -162,45 +162,58 @@ int main() {
   hold(false, 1000);
   expectMode(OperatingMode::HomeScreen, "Halten hinten: fertig, zurück zum Start");
 
-  puts("== Menü");
+  puts("== Menü: hinten immer zurück, vorne blättern, vorne halten öffnet");
   click(false);
   expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü");
-  click(false);
   click(true);
-  expectMode(OperatingMode::DebugMenuReadout, "Menü, Info: Klick vorne öffnet die Info-Seiten");
+  hold(true, 800);
+  expectMode(OperatingMode::DebugMenuReadout, "Klick vorne zu Info, Halten vorne öffnet die Info-Seiten");
   for (int i = 0; i < 4; i++) {
-    click(false);
+    click(true);
   }
-  click(true);
-  hold(false, 1000);
-  expectMode(OperatingMode::DebugMenuReadout, "Halten hinten verlässt die Debug-Werte zur System-Seite");
-  hold(false, 1000);
-  expectMode(OperatingMode::SettingsMenu, "Halten hinten verlässt die Info-Seiten zum Menü");
-  click(true);
+  hold(true, 800);
+  click(false);
+  expectMode(OperatingMode::DebugMenuReadout, "System: Halten vorne öffnet Debug, Klick hinten führt zurück zur Seite");
+  click(false);
+  expectMode(OperatingMode::SettingsMenu, "Klick hinten verlässt die Info-Seiten zum Menü");
+  hold(true, 800);
   expectMode(OperatingMode::DebugMenuReadout, "das Menü steht danach wieder auf Info");
-  hold(false, 1000);
-  for (int i = 0; i < 7; i++) {
-    click(false); // Löten ... System, Zurück, dann wieder Temperatur
+  click(false);
+  for (int i = 0; i < 6; i++) {
+    click(true); // Löten ... System, dann wieder Temperatur
   }
-  click(true);
-  expectMode(OperatingMode::TemperatureAdjust, "Menü, Temperatur öffnet die Temperatur");
+  hold(true, 800);
+  expectMode(OperatingMode::TemperatureAdjust, "Menü, Temperatur: Halten vorne öffnet die Temperatur");
   hold(false, 1000);
   expectMode(OperatingMode::SettingsMenu, "Halten hinten führt zurück ins Menü");
-  click(false);
-  click(false);
-  click(false);
-  click(true); // Schlaf
-  click(false);
-  click(true); // Schlaf nach: ändern
+  click(true);
+  click(true);
+  click(true);
+  hold(true, 800); // Schlaf
+  click(true);
   const uint16_t sleepBefore = getSettingValue(SettingsOptions::SleepTime);
   click(true);
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Klick vorne in der Liste blättert und ändert nichts");
+  click(true);
+  click(true);
+  click(true); // vier Punkte: einmal herum zurück auf Schlaf nach
+  hold(true, 800); // Schlaf nach: ändern
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Halten vorne öffnet den Wert, ohne ihn zu ändern");
+  click(true);
   expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "Wert: Klick vorne erhöht");
+  click(false);
+  expectMode(OperatingMode::SettingsMenu, "Klick hinten: Wert fertig");
+  click(false);
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "Klick hinten nach dem Wert verringert nichts");
+  expectMode(OperatingMode::SettingsMenu, "Klick hinten verlässt den Bereich");
+  click(false);
+  expectMode(OperatingMode::HomeScreen, "Klick hinten verlässt das Menü");
+  click(false);
+  hold(true, 800);
   hold(false, 1000);
-  expectMode(OperatingMode::SettingsMenu, "Halten hinten verlässt den Wert");
+  expectMode(OperatingMode::SettingsMenu, "Halten hinten im Bereich: eine Ebene zurück");
   hold(false, 1000);
-  expectMode(OperatingMode::SettingsMenu, "Halten hinten verlässt den Bereich");
-  hold(false, 1000);
-  expectMode(OperatingMode::HomeScreen, "Halten hinten verlässt das Menü");
+  expectMode(OperatingMode::HomeScreen, "Halten hinten im Menü: zurück zum Start");
   setSettingValue(SettingsOptions::SleepTime, 6);
 
   puts("== Schlaf");

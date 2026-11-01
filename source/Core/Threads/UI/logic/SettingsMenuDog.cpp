@@ -1,6 +1,7 @@
 /*
- * TS101_DOG_UI: the flat settings menu. Seven points, one level below them, a visible way out at the end of every list,
- * and every value saves itself when it is left. Front opens or raises, rear moves on or lowers, holding the rear button leaves.
+ * TS101_DOG_UI: the flat settings menu. Seven points, one level below them, and every value saves itself when it is left.
+ * The rear button always goes back, click or hold. The front button moves on with a click and opens or changes when held;
+ * on a value a click raises it and wraps round at the top.
  * The position lives in this file, not in the scratch state: the temperature view and the info pages are modes of their own.
  */
 #include "OperatingModes.h"
@@ -82,7 +83,7 @@ static const uint8_t SECTION_COUNT = sizeof(sections) / sizeof(sections[0]);
 
 // Where we are, kept across the temperature view and the info pages
 static uint8_t    openSection = NO_SECTION; // the section whose items are listed
-static uint8_t    position    = 0;          // in the list; the entry after the last one is the way out
+static uint8_t    position    = 0;          // in the list
 static bool       editing     = false;      // the value of the current item is being changed
 static bool       changed     = false;
 static TickType_t savedAt     = 0;          // "saved" shows in the key row for a moment
@@ -308,8 +309,8 @@ static void drawHeader(const char *title, uint8_t number, uint8_t total) {
 
 static void drawBigValue(const char *text) { dogText(dogFontHead, (OLED_WIDTH - dogTextWidth(dogFontHead, text)) / 2, 22, text); }
 
-static void drawListKeys(const DogKey front, const DogMenuItem *item) {
-  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL)) {
+static void drawListKeys(const char *holdDe, const char *holdEn, const DogMenuItem *item) {
+  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL) || (holdDe && dogDrawHold(T(holdDe, holdEn), true, DOG_HOLD_FULL))) {
     return;
   }
   const TickType_t now = xTaskGetTickCount();
@@ -321,7 +322,7 @@ static void drawListKeys(const DogKey front, const DogMenuItem *item) {
     dogSmall(x + 9, saved);
     return;
   }
-  helpShowing = item && now - lastButtonTime > HELP_TICKS;
+  helpShowing = item && now - lastButtonTime > HELP_TICKS && !dogPressed(true) && !dogPressed(false);
   if (helpShowing) {
     // The explanation runs through the key row until a button is pressed
     const char   *text  = T(item->helpDe, item->helpEn);
@@ -329,37 +330,27 @@ static void drawListKeys(const DogKey front, const DogMenuItem *item) {
     dogSmall(-(int16_t)(((now - lastButtonTime - HELP_TICKS) / (TICKS_100MS / 2)) % width), text);
     return;
   }
-  dogDrawKeys(front, {iconMenu, T("WEITER", "NEXT")}, nullptr);
+  dogDrawKeys({iconNext, T("WEITER", "NEXT")}, {iconBack, T("ZURÜCK", "BACK")}, nullptr);
 }
 
 void dogDrawMenuList(uint8_t section, uint8_t pos) {
-  const DogKey open = {iconNext, T("ÖFFNEN", "OPEN")};
   if (section == NO_SECTION) {
-    const char *title = T("MENÜ", "MENU");
-    if (pos >= SECTION_COUNT) {
-      drawHeader(title, 0, 0); // the way out carries no number: the seven points are what is counted
-      drawBigValue(T("ZURÜCK", "BACK"));
-    } else {
-      drawHeader(title, pos + 1, SECTION_COUNT);
-      drawBigValue(T(sections[pos].de, sections[pos].en));
-    }
-    drawListKeys(open, nullptr);
+    drawHeader(T("MENÜ", "MENU"), pos + 1, SECTION_COUNT);
+    drawBigValue(T(sections[pos].de, sections[pos].en));
+    drawListKeys("HALTEN: ÖFFNEN", "HOLD: OPEN", nullptr);
     return;
   }
-  const DogMenuSection &s     = sections[section];
-  const uint8_t         total = s.count + 1;
-  if (pos >= s.count) {
-    drawHeader(T(s.de, s.en), total, total);
-    drawBigValue(T("ZURÜCK", "BACK"));
-    drawListKeys(open, nullptr);
-    return;
-  }
-  const DogMenuItem &item = s.items[pos];
-  drawHeader(T(item.de, item.en), pos + 1, total);
+  const DogMenuSection &s    = sections[section];
+  const DogMenuItem    &item = s.items[pos];
+  drawHeader(T(item.de, item.en), pos + 1, s.count);
   char value[16];
   formatValue(item, value);
   drawBigValue(value);
-  drawListKeys(item.format == Fmt::Action ? open : DogKey{iconPlus, T("ÄNDERN", "CHANGE")}, &item);
+  if (item.format == Fmt::Action) {
+    drawListKeys("HALTEN: START", "HOLD: START", &item);
+  } else {
+    drawListKeys("HALTEN: ÄNDERN", "HOLD: CHANGE", &item);
+  }
 }
 
 void dogDrawMenuValue(uint8_t section, uint8_t pos) {
@@ -372,7 +363,7 @@ void dogDrawMenuValue(uint8_t section, uint8_t pos) {
   if (dogDrawHold(T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL)) {
     return;
   }
-  dogDrawCorners(iconPlus, iconMinus);
+  dogDrawCorners(iconPlus, iconBack);
   // Runs down over the 2 s until the value saves itself
   const TickType_t idle = xTaskGetTickCount() - lastButtonTime;
   const uint8_t    fill = idle >= DOG_ADJUST_TIMEOUT ? 0 : (44 * (DOG_ADJUST_TIMEOUT - idle)) / DOG_ADJUST_TIMEOUT;
@@ -398,7 +389,7 @@ static void leaveValue() {
 static OperatingMode editValue(const ButtonState buttons, guiContext *cxt) {
   const DogMenuItem &item = sections[openSection].items[position];
   dogDrawMenuValue(openSection, position);
-  if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
+  if (buttons == BUTTON_B_SHORT || buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     leaveValue();
     return OperatingMode::SettingsMenu;
@@ -412,8 +403,8 @@ static OperatingMode editValue(const ButtonState buttons, guiContext *cxt) {
     }
     return OperatingMode::SettingsMenu;
   }
-  if (buttons == BUTTON_F_SHORT || buttons == BUTTON_B_SHORT) {
-    stepValue(item, buttons == BUTTON_F_SHORT);
+  if (buttons == BUTTON_F_SHORT) {
+    stepValue(item, true);
     changed = true;
   }
   if (xTaskGetTickCount() - lastButtonTime > DOG_ADJUST_TIMEOUT) {
@@ -454,18 +445,16 @@ OperatingMode gui_SettingsMenu(const ButtonState buttonsIn, guiContext *cxt) {
     helpShowing = false;
     buttons     = BUTTON_NONE; // the key row wasn't showing, so this click can't have meant what it does
   }
-  if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
+  if (buttons == BUTTON_B_SHORT || buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     return leaveList(cxt);
   }
   const uint8_t count = openSection == NO_SECTION ? SECTION_COUNT : sections[openSection].count;
-  if (buttons == BUTTON_B_SHORT) {
-    position            = position >= count ? 0 : position + 1;
+  if (buttons == BUTTON_F_SHORT) {
+    position            = (position + 1) % count;
     cxt->transitionMode = TransitionAnimation::Down;
-  } else if (buttons == BUTTON_F_SHORT) {
-    if (position >= count) {
-      return leaveList(cxt);
-    }
+  } else if (dogHoldDone(true, DOG_HOLD_FULL)) {
+    dogPressConsumed();
     if (openSection == NO_SECTION) {
       if (position == 0) {
         cxt->transitionMode = TransitionAnimation::Left;

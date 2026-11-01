@@ -516,14 +516,9 @@ void dogDrawInfoPage(uint8_t page) {
   dogSmallRight(OLED_WIDTH - 1, value1, 15);
   dogSmall(0, label2, 23);
   dogSmallRight(OLED_WIDTH - 1, value2, 23);
-  if (dogDrawHold(DOG_T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL)) {
+  if (dogDrawHold(DOG_T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL) || (page == DOG_INFO_PAGES - 1 && dogDrawHold(DOG_T("HALTEN: DEBUG", "HOLD: DEBUG"), true, DOG_HOLD_FULL))) {
     return;
   }
-  const DogKey next = {iconMenu, DOG_T("WEITER", "NEXT")};
-  if (page == DOG_INFO_PAGES - 1) {
-    dogDrawKeys({iconNext, DOG_T("ÖFFNEN", "OPEN")}, next, nullptr);
-  } else {
-    dogDrawKeys({nullptr, nullptr}, next, nullptr);
-  }
+  dogDrawKeys({iconNext, DOG_T("WEITER", "NEXT")}, {iconBack, DOG_T("ZURÜCK", "BACK")}, nullptr);
 }
 #endif

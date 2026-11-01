@@ -26,6 +26,7 @@ extern const uint8_t iconMenu[8];
 extern const uint8_t iconPlus[8];
 extern const uint8_t iconMinus[8];
 extern const uint8_t iconNext[8];
+extern const uint8_t iconBack[8];
 extern const uint8_t iconCheck[8];
 extern const uint8_t iconLock[72];
 

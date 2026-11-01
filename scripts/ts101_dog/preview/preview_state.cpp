@@ -161,11 +161,11 @@ std::vector<PreviewScene> previewScenes() {
       {"m4_item", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(3, 1); }},
       {"m5_toggle", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(3, 0); }},
       {"m6_edit", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 600; settings[SettingsOptions::SleepTime] = 11; dogDrawMenuValue(3, 1); }},
-      {"m8_zurueck", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(3, 4); }},
       {"m9_halten", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; pressed(false, 150 + 270); dogDrawMenuList(3, 1); }},
       {"m10_hilfe", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 3001; settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(3, 1); }},
+      {"m13_vorne_halten", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; pressed(true, 150 + 270); dogDrawMenuList(3, 1); }},
+      {"i6_debug_halten", T, 26, 320, 0, 201, false, [] { pressed(true, 150 + 270); dogDrawInfoPage(4); }},
       {"m11_loeten_spitze", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(2, 3); }},
-      {"m12_menu_zurueck", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(DOG_MENU_ROOT, 7); }},
       // Step 1: the key row (rows 23-31 are compared with the mock of the same name)
       {"k_s1_start", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
       {"k_s3_schwach", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "9V 18W!"); }},
