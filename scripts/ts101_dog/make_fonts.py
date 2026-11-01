@@ -1,23 +1,39 @@
 """Generate source/Core/Threads/UI/drawing/mono_128x32/ts101_dog_fonts.h/.cpp: bitmap tables of the fonts in fonts/ (OFL, see the licence files there) and the key row icons."""
 import os
+import sys
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', '..', 'source', 'Core', 'Threads', 'UI', 'drawing', 'mono_128x32')
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'Translations'))
+import font_tables  # the IronOS 6x8 font
 THRESHOLD = 120  # coverage that turns into a lit pixel
 
 DIGITS = '0123456789'
 UPPER = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ' + DIGITS + '.:/-+!%°'
-SMALL = UPPER + ',()~?'
-UMLAUT_BASE = {'Ä': 'A', 'Ö': 'O', 'Ü': 'U'}
+SMALL = UPPER + ',()~?·' + 'ÄÖÜ' + 'Solet' + 's'
 # name: (ttf, size, characters, pages, row of the baseline inside the glyph)
 FONTS = {
-    'Big':   ('BarlowCondensed-SemiBold.ttf', 28, DIGITS, 3, 22),      # the large temperature
-    'Mid':   ('BarlowCondensed-SemiBold.ttf', 22, DIGITS + ':', 2, 16),  # the temperature next to the sleeping dog, the total time
-    'Head':  ('Barlow-SemiBold.ttf', 19, UPPER + 'ÄÖÜ', 3, 22),        # menu values and full screen notices
-    'Small': ('Silkscreen-Regular.ttf', 8, SMALL + 'ÄÖÜ', 1, 7),       # the small row, umlaut dots set by hand
+    'Big':   ('BarlowCondensed-SemiBold.ttf', 28, DIGITS, 3, 22),  # the large temperature
+    'Head':  ('Barlow-SemiBold.ttf', 19, UPPER + 'ÄÖÜ', 3, 22),    # full screen notices
 }
-TILDE = [(0, -2), (1, -3), (2, -2), (3, -3)]  # marks calculated values, drawn by hand on the small font's baseline
+
+def ironos_small():
+    """The small row and the menu: the IronOS 6x8 font, columns from the top bit down"""
+    table = {**font_tables.get_small_font_map_ascii_basic(), **font_tables.get_small_font_map_latin_extended()}
+    glyphs = {}
+    for char in dict.fromkeys(SMALL):
+        pixels = {(x, bit - 7) for x, col in enumerate(table[char]) for bit in range(8) if col >> bit & 1}
+        glyphs[char] = (pixels, 6)
+    return glyphs, 1, 7
+
+def label_font():
+    """Mixed-case labels, from fonts/label8x10.txt"""
+    lines = [l.rstrip('\n') for l in open(os.path.join(HERE, 'fonts', 'label8x10.txt'), encoding='utf8') if not l.startswith('# ')]
+    glyphs = {' ': (set(), 8)}
+    for i in range(0, len(lines), 14):
+        glyphs[lines[i]] = ({(x, y - 10) for y, row in enumerate(lines[i + 1:i + 14]) for x, c in enumerate(row) if c == '#'}, 9 if lines[i] == 'M' else 8)
+    return glyphs, 2, 10
 
 def render(font, char):
     width = int(font.getlength(char)) + 3
@@ -26,25 +42,12 @@ def render(font, char):
     px = img.load()
     return {(x, y - 36) for x in range(width) for y in range(48) if px[x, y] >= THRESHOLD}
 
-def glyph(name, font, char):
-    """Lit pixels relative to the pen and the baseline, and the advance"""
-    if name == 'Small' and char == '~':
-        return set(TILDE), 5
-    if name == 'Small' and char in UMLAUT_BASE:
-        base = UMLAUT_BASE[char]
-        pixels = render(font, base)
-        ink = max(x for x, _ in pixels) + 1
-        return pixels | {(1, -7), (ink - 2, -7)}, int(font.getlength(base))
-    return render(font, char), int(font.getlength(char))
-
 def code_of(char):  # one byte per glyph: ASCII, or the second UTF-8 byte of Ä Ö Ü °
     return char.encode('utf8')[-1]
 
-def build(name, ttf, size, chars, pages, baseline):
-    font = ImageFont.truetype(os.path.join(HERE, 'fonts', ttf), size)
+def build(glyphs, pages, baseline):
     codes, offsets, widths, advances, bitmap = [], [], [], [], []
-    for char in chars:
-        pixels, advance = glyph(name, font, char)
+    for char, (pixels, advance) in glyphs.items():
         width = max((x for x, _ in pixels), default=-1) + 1
         codes.append(code_of(char)); offsets.append(len(bitmap)); widths.append(width); advances.append(advance)
         for page in range(pages):
@@ -55,6 +58,14 @@ def build(name, ttf, size, chars, pages, baseline):
                         byte |= 1 << bit
                 bitmap.append(byte)
     return codes, offsets, widths, advances, bitmap
+
+def from_ttf(name, ttf, size, chars, pages, baseline):
+    font = ImageFont.truetype(os.path.join(HERE, 'fonts', ttf), size)
+    glyphs = {c: (render(font, c), int(font.getlength(c))) for c in chars}
+    if name == 'Big':  # the 1 sits one column further right on the boards
+        pixels, advance = glyphs['1']
+        glyphs['1'] = ({(x + 1, y) for x, y in pixels}, advance)
+    return glyphs, pages, baseline
 
 def rows(values, per=24, fmt='0x{:02X}'):
     return ',\n'.join('    ' + ', '.join(fmt.format(v) for v in values[i:i + per]) for i in range(0, len(values), per))
@@ -80,7 +91,8 @@ ICONS = {  # key row icons, 8x8 unless noted
     'iconPlus':     [0x18, 0x18, 0xFF, 0xFF, 0x18, 0x18, 0, 0],
     'iconMinus':    [0x18] * 6 + [0, 0],
     'iconNext':     [0x08, 0x08, 0x08, 0x08, 0x2A, 0x1C, 0x08, 0],
-    'iconHot':      [0x80, 0xE0, 0x98, 0x86, 0xD9, 0x86, 0x98, 0xE0, 0x80],  # 9x8 warning triangle with '!', the tip is still hot
+    'iconHot':      [0xE0, 0x98, 0x86, 0xD9, 0x86, 0x98, 0xE0],  # 7x8 warning triangle with '!', the tip is still hot
+    'iconReady':    [0x0C, 0x18, 0x30, 0x30, 0x18, 0x0C, 0x06, 0x03],  # the check mark next to "Bereit"
     'iconBack':     [0x08, 0x1C, 0x2A, 0x08, 0x08, 0x08, 0x08, 0],  # iconNext mirrored
     'iconCheck':    [0x10, 0x20, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02],
     'iconLock':     lock_icon(),
@@ -92,9 +104,12 @@ def main():
          '  const uint16_t *offsets;  // into bitmap', '  const uint8_t  *widths;   // columns stored', '  const uint8_t  *advances; // pen movement',
          '  const uint8_t  *bitmap;   // page format, pages * width bytes per glyph', '  uint8_t         count;', '  uint8_t         pages;', '  uint8_t         baseline; // row of the baseline inside a glyph',
          '} DogFont;', '']
-    c = ['// Generated by scripts/ts101_dog/make_fonts.py - do not edit', '// Barlow, Barlow Condensed and Silkscreen are licensed under the SIL OFL 1.1, see scripts/ts101_dog/fonts/', '#include "ts101_dog_fonts.h"', '']
-    for name, (ttf, size, chars, pages, baseline) in FONTS.items():
-        codes, offsets, widths, advances, bitmap = build(name, ttf, size, chars, pages, baseline)
+    c = ['// Generated by scripts/ts101_dog/make_fonts.py - do not edit', '// Barlow and Barlow Condensed are licensed under the SIL OFL 1.1, see scripts/ts101_dog/fonts/', '#include "ts101_dog_fonts.h"', '']
+    tables = {name: from_ttf(name, *spec) for name, spec in FONTS.items()}
+    tables['Small'] = ironos_small()
+    tables['Label'] = label_font()
+    for name, (glyphs, pages, baseline) in tables.items():
+        codes, offsets, widths, advances, bitmap = build(glyphs, pages, baseline)
         h.append(f'extern const DogFont dogFont{name};')
         c += [f'static const uint8_t {name}Codes[] = {{\n{rows(codes)}}};',
               f'static const uint16_t {name}Offsets[] = {{\n{rows(offsets, 16, "{}")}}};',

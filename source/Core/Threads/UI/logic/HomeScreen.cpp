@@ -7,6 +7,8 @@
 bool showExitMenuTransition = false;
 
 #ifdef TS101_DOG_UI
+static TickType_t lockNoticeUntil = 0; // says what the lock gesture just did
+
 static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext *cxt) {
   if (buttons != BUTTON_NONE && cxt->scratch_state.state1 == 0) {
     return OperatingMode::HomeScreen; // whatever was pressed on the way here: wait until the buttons are let go once
@@ -19,10 +21,21 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
     }
     return OperatingMode::HomeScreen;
   }
+  if (buttons == BUTTON_BOTH_LONG && getSettingValue(SettingsOptions::LockingMode)) {
+    dogPressConsumed(); // once per press; while soldering both buttons stop instead, so the lock is switched here
+    dogLockArmed    = !dogLockArmed;
+    lockNoticeUntil = xTaskGetTickCount() + TICKS_SECOND * 3 / 2;
+    return OperatingMode::HomeScreen;
+  }
   if (dogHoldDone(true, DOG_HOLD_FULL)) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Left;
     return OperatingMode::TemperatureAdjust;
+  }
+  if (dogHoldDone(false, DOG_HOLD_FULL)) {
+    dogPressConsumed();
+    cxt->transitionMode = TransitionAnimation::Left;
+    return OperatingMode::DebugMenuReadout;
   }
   switch (buttons) {
   case BUTTON_F_SHORT:
@@ -39,7 +52,7 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
     cxt->transitionMode = TransitionAnimation::Right;
     return OperatingMode::SettingsMenu;
   default:
-    break; // holding the rear button does nothing here: there is nowhere further out
+    break;
   }
   return OperatingMode::HomeScreen;
 }
@@ -114,7 +127,11 @@ OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
     dogCurveReset();
   }
   dogCurveSample(TipThermoModel::getTipInC(), DOG_COOL_SAMPLE_TICKS);
-  ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
+  if (xTaskGetTickCount() < lockNoticeUntil) {
+    dogWarnLocked(dogLockArmed, BUTTON_NONE);
+  } else {
+    ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
+  }
   return handleDogHomeButtons(buttons, cxt);
 #else
   if (getSettingValue(SettingsOptions::DetailedIDLE)) {

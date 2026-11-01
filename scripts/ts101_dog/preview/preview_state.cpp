@@ -31,7 +31,7 @@ void              setSettingValue(const enum SettingsOptions option, const uint1
 void              saveSettings() {}
 // Wraps like the real one for the two-state settings the menu shows as switches; others only count up
 void nextSettingValue(const enum SettingsOptions o) {
-  const bool twoStates = o == SettingsOptions::OLEDInversion || o == SettingsOptions::TemperatureInF || o == SettingsOptions::ReverseButtonTempChangeEnabled || o == SettingsOptions::CalibrateCJC;
+  const bool twoStates = o == SettingsOptions::OLEDInversion || o == SettingsOptions::TemperatureInF || o == SettingsOptions::ReverseButtonTempChangeEnabled || o == SettingsOptions::CalibrateCJC || o == SettingsOptions::DogSolderView || o == SettingsOptions::DogHomeVariant;
   settings[o]          = (twoStates && settings[o] >= 1) ? 0 : settings[o] + 1;
 }
 void              prevSettingValue(const enum SettingsOptions o) { settings[o]--; }
@@ -50,6 +50,10 @@ int16_t           getHandleTemperature(uint8_t) { return handleX10; }
 uint8_t           getTipResistanceX10() { return 62; }
 bool              isTipDisconnected() { return tipMissing; }
 bool              getIsPoweredByDCIN() { return false; }
+#ifndef BUTTON_TEST // from Soldering.cpp there
+static uint8_t testBoostSeconds = 30;
+uint8_t        dogBoostSecondsLeft() { return testBoostSeconds; }
+#endif
 #ifndef BUTTON_TEST // from Buttons.cpp / SolderingCommon.cpp there
 int8_t            getPowerSourceNumber(void) { return 3; }
 #endif
@@ -111,19 +115,28 @@ void previewApply(const PreviewScene &s) {
   settings[SettingsOptions::DetailedSoldering] = s.detailed;
   settings[SettingsOptions::DetailedIDLE]      = s.detailed;
   tipMissing                                   = false;
-  dogSolderTimerStart = dogBarkUntil = 0;
+  dogSolderTimerStart = dogReachedUntil = 0;
+  settings[SettingsOptions::DogHomeVariant] = 0;
   dogHeatupStartTempC                                                     = 25;
   dogLastSessionSeconds                                                   = 27 * 60 + 12;
 }
 
 // The same simulated tip temperatures as the mock
-enum class Series { Steady, Dip, Drop, Heat, Boost, Cool };
+enum class Series { Steady, Dip, Drop, Heat, Boost, Cool, Set350, Load, Limited };
 static void fillSeries(Series kind, uint32_t spacing = 250) {
   dogCurveReset();
   const uint32_t now = previewTicks;
   for (int i = 0; i < 72; i++) {
     int t = 320;
     switch (kind) {
+    case Series::Set350: t = 350; break;
+    case Series::Load: { // the dip on the board: rows below the set line, by column
+      const int x = i * 78 / 72;
+      const int y = x < 57 ? 0 : x < 58 ? 1 : x < 59 ? 2 : x < 60 ? 3 : x < 61 ? 4 : x < 65 ? 5 : x < 67 ? 4 : x < 69 ? 3 : x < 73 ? 2 : 1;
+      t = 350 - y * 45 / 7;
+      break;
+    }
+    case Series::Limited: t = 49 + i * 119 / 71; break;
     case Series::Steady: t = 320 + (i % 17 == 0 ? 1 : 0); break;
     case Series::Dip: t = (i < 40 || i >= 60) ? 320 : (i < 46 ? 320 - (i - 40) * 5 : 290 + (i - 46) * 2); break;
     case Series::Drop: t = i < 52 ? 320 : (320 - (i - 52) * 4 > 288 ? 320 - (i - 52) * 4 : 288); break;
@@ -140,21 +153,47 @@ static void fillSeries(Series kind, uint32_t spacing = 250) {
 // The set point was reached this many seconds ago
 static void atTemp(uint32_t seconds) { dogSolderTimerStart = (previewTicks - seconds * 1000 - 1) | 1; }
 
+#ifndef BUTTON_TEST
+static void setBoostPreview(uint8_t s) { testBoostSeconds = s; }
+#else
+static void setBoostPreview(uint8_t) {}
+#endif
+
 std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 200000; // a time well away from the occasional wag
   const DogKey solderKey = {iconPlay8, "LÖTEN"}, menuKey = {iconMenu, "MENÜ"};
   return {
-      // Step 3: home, sleep, info, interruptions
-      {"s1_start", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(26); }},
-      {"s7_start_100h", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; settings[SettingsOptions::TotalSolderMinutes] = 123 * 60 + 4; ui_draw_homescreen_simplified(26); settings[SettingsOptions::TotalSolderMinutes] = 42 * 60 + 17; }},
-      {"s2_heiss", 6000000 + 3500, 180, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; fillSeries(Series::Cool, 2500); ui_draw_homescreen_simplified(180); }},
-      {"s8_heiss_gedreht", 6000000 + 3500, 180, 320, 0, 201, false, [] { orient(false); limitX10 = 900; vX10 = 200; fillSeries(Series::Cool, 2500); ui_draw_homescreen_simplified(180); }},
-      {"s9_heiss_frisch", 6000000 + 3500, 300, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; dogCurveReset(); for (int i = 0; i < 6; i++) { previewTicks += 2500; dogCurveSample(320 - i * 4, 2500); } ui_draw_homescreen_simplified(300); }},
+      // The Gegenentwürfe boards, compared with c_g_*.png
+      {"g_start", 6000000 + 3000, 26, 350, 0, 201, false, [] { limitX10 = 650; vX10 = 200; ui_draw_homescreen_simplified(26); }},
+      {"g_start_hund", 6000000 + 3000, 26, 350, 0, 201, false, [] { limitX10 = 650; vX10 = 200; settings[SettingsOptions::DogHomeVariant] = 1; lastMovementTime = 0; ui_draw_homescreen_simplified(26); }},
+      {"g_heiss", 6000000 + 3500, 180, 350, 0, 201, false, [] { limitX10 = 650; vX10 = 200; fillSeries(Series::Cool, 2500); ui_draw_homescreen_simplified(180); }},
+      {"g_start_flip", 6000000 + 3000, 26, 350, 0, 201, false, [] { orient(false); limitX10 = 650; vX10 = 200; ui_draw_homescreen_simplified(26); }},
+      {"g_heizt", T, 185, 350, 650, 201, false, [] { limitX10 = 650; fillSeries(Series::Heat); ui_draw_soldering_basic_status(false); }},
+      {"g_begrenzt", T, 142, 350, 130, 90, false, [] { limitX10 = 130; fillSeries(Series::Limited); ui_draw_soldering_basic_status(false); }},
+      {"g_bereit", T, 350, 350, 90, 201, false, [] { limitX10 = 650; fillSeries(Series::Set350); atTemp(199); ui_draw_soldering_basic_status(false); }},
+      {"g_erreicht", T, 350, 350, 90, 201, false, [] { limitX10 = 650; fillSeries(Series::Set350); atTemp(0); dogReachedUntil = previewTicks + 100; ui_draw_soldering_basic_status(false); }},
+      {"g_last", T, 318, 350, 580, 201, false, [] { limitX10 = 650; fillSeries(Series::Load); atTemp(199); ui_draw_soldering_basic_status(false); }},
+      {"g_detail", T, 318, 350, 580, 201, false, [] { limitX10 = 650; atTemp(199); ui_draw_soldering_power_status(false); }},
+      {"g_boost", 209000, 385, 350, 650, 201, false, [] { limitX10 = 650; settings[SettingsOptions::BoostTemp] = 400; setBoostPreview(28); ui_draw_soldering_basic_status(true); settings[SettingsOptions::BoostTemp] = 420; }},
+      {"g_stopp", T, 350, 350, 90, 201, false, [] { limitX10 = 650; atTemp(199); pressed(false, 150 + 191); ui_draw_soldering_basic_status(false); }},
+      {"g_temp", T, 318, 350, 150, 201, false, [] { limitX10 = 650; dogDrawTemperatureView(false); }},
+      {"g_schlaf", 6000000 + 162000, 150, 350, 0, 201, false, [] { dogSleepEnterTime = previewTicks - 161000; lastMovementTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
+      {"g_menu", T, 26, 350, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; settings[SettingsOptions::SleepTemp] = 150; dogDrawMenuList(3, 1); }},
+      {"g_wert", T, 26, 350, 0, 201, false, [] { lastButtonTime = previewTicks - 1800; settings[SettingsOptions::SleepTime] = 11; dogDrawMenuValue(3, 1); }},
+      // Other states, no board
       {"s3_schwach", 6000000 + 3000, 26, 320, 0, 90, false, [] { limitX10 = 180; ui_draw_homescreen_simplified(26); }},
       {"s4_druck", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 100); ui_draw_homescreen_simplified(26); }},
       {"s5_halten", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 150 + 270); ui_draw_homescreen_simplified(26); }},
-      {"r1_start_gedreht", 6000000 + 3000, 26, 320, 0, 201, false, [] { orient(false); limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(26); }},
-      {"z1_schlaf", 6000000 + 162000, 150, 320, 0, 201, false, [] { dogSleepEnterTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
+      {"r2_heiss_gedreht", 6000000 + 3500, 180, 350, 0, 201, false, [] { orient(false); limitX10 = 650; vX10 = 200; fillSeries(Series::Cool, 2500); ui_draw_homescreen_simplified(180); }},
+      {"r3_bereit_gedreht", T, 350, 350, 90, 201, false, [] { orient(false); limitX10 = 650; fillSeries(Series::Set350); atTemp(199); ui_draw_soldering_basic_status(false); }},
+      {"r4_detail_gedreht", T, 318, 350, 580, 201, false, [] { orient(false); limitX10 = 650; atTemp(199); ui_draw_soldering_power_status(false); }},
+      {"r5_schlaf_gedreht", 6000000 + 162000, 150, 350, 0, 201, false, [] { orient(false); dogSleepEnterTime = previewTicks - 161000; lastMovementTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
+      {"r6_stopp_gedreht", T, 350, 350, 90, 201, false, [] { orient(false); limitX10 = 650; atTemp(199); pressed(false, 150 + 191); ui_draw_soldering_basic_status(false); }},
+      {"r7_temp_gedreht", T, 318, 350, 150, 201, false, [] { orient(false); limitX10 = 650; dogDrawTemperatureView(false); }},
+      {"z2_schlaf_aus", 6000000 + 162000, 150, 350, 0, 201, false, [] { settings[SettingsOptions::ShutdownTime] = 0; dogSleepEnterTime = previewTicks - 161000; ui_draw_soldering_basic_sleep(150); }},
+      {"t2_preset300", T, 318, 300, 150, 201, false, [] { dogDrawTemperatureView(true); }},
+      {"t4_preset400", T, 318, 400, 150, 201, false, [] { dogDrawTemperatureView(true); }},
+      {"t1_temp_eigen", T, 318, 320, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
       {"i1_strom", T, 26, 320, 0, 201, false, [] { limitX10 = 900; dogDrawInfoPage(0); }},
       {"i2_spitze", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(1); }},
       {"i3_griff", T, 26, 320, 0, 201, false, [] { dogDrawInfoPage(2); }},
@@ -180,41 +219,6 @@ std::vector<PreviewScene> previewScenes() {
       {"m15_system", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::KeepAwakePulse] = 5; settings[SettingsOptions::ReverseButtonTempChangeEnabled] = 0; dogDrawMenuList(6, 4); }},
       {"m16_strom", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::USBPDMode] = 1; settings[SettingsOptions::PDNegTimeout] = 20; settings[SettingsOptions::PowerLimit] = 0; dogDrawMenuList(4, 0); }},
       {"m11_loeten_spitze", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(2, 3); }},
-      // Step 1: the key row (rows 23-31 are compared with the mock of the same name)
-      {"k_s1_start", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
-      {"k_s3_schwach", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "9V 18W!"); }},
-      {"k_s4_druck", T, 26, 320, 0, 201, false, [=] { pressed(true, 100); dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
-      {"k_s5_halten", T, 26, 320, 0, 201, false, [] { pressed(true, 150 + 270); dogDrawHold("HALTEN: TEMPERATUR", true, DOG_HOLD_FULL); }},
-      {"k_l8_stopp", T, 26, 320, 0, 201, false, [] { pressed(false, 150 + 595); dogDrawHold("HALTEN: STOPP", false, DOG_HOLD_STOP); }},
-      {"k_m9_halten", T, 26, 320, 0, 201, false, [] { pressed(false, 150 + 270); dogDrawHold("HALTEN: ZURÜCK", false, DOG_HOLD_FULL); }},
-      {"k_l9_druck_temp", T, 26, 320, 0, 201, false, [] { pressed(true, 100); dogDrawCorners(iconUpDown, iconInfo); }},
-      {"k_r1_start_gedreht", T, 26, 320, 0, 201, false, [=] { orient(false); dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
-      {"k_m1_menu_temp", T, 26, 320, 0, 201, false, [] { dogDrawKeys({iconNext, "ÖFFNEN"}, {iconMenu, "WEITER"}, nullptr); }},
-      {"k_m4_item", T, 26, 320, 0, 201, false, [] { dogDrawKeys({iconPlus, "ÄNDERN"}, {iconMenu, "WEITER"}, nullptr); }},
-      {"k_m6_edit", T, 26, 320, 0, 201, false, [] { dogDrawCorners(iconPlus, iconMinus); }},
-      {"k_s6_big", T, 26, 320, 0, 201, false, [] { dogBig(dogTextWidth(dogFontSmall, "SOLL") + 2, 320); dogSmall(0, "SOLL", 15); }},
-      {"k_z1_mid", T, 26, 320, 0, 201, false, [] { dogText(dogFontMid, 127 - dogTextWidth(dogFontMid, "150") - 6, 16, "150"); }},
-      {"k_m1_head", T, 26, 320, 0, 201, false, [] { dogText(dogFontHead, (128 - dogTextWidth(dogFontHead, "TEMPERATUR")) / 2, 22, "TEMPERATUR"); dogSmall(0, "MENÜ", 7); dogSmallRight(127, "1/7", 7); }},
-      {"k_m8_zurueck", T, 26, 320, 0, 201, false, [] { dogText(dogFontHead, (128 - dogTextWidth(dogFontHead, "ZURÜCK")) / 2, 22, "ZURÜCK"); dogSmall(0, "SCHLAF", 7); dogSmallRight(127, "5/5", 7); }},
-      // Step 2: soldering
-      {"l1_aufheizen", T, 180, 320, 900, 201, false, [] { fillSeries(Series::Heat); ui_draw_soldering_basic_status(false); }},
-      {"l5_begrenzt", T, 142, 320, 180, 90, false, [] { limitX10 = 180; fillSeries(Series::Heat); ui_draw_soldering_basic_status(false); }},
-      {"l2_wuff", T, 318, 320, 300, 201, false, [] { fillSeries(Series::Steady); atTemp(0); dogBarkUntil = previewTicks + 1000; ui_draw_soldering_basic_status(false); }},
-      {"l3_bereit", T, 320, 320, 150, 201, false, [] { fillSeries(Series::Steady); atTemp(199); ui_draw_soldering_basic_status(false); }},
-      {"l4_last", T, 298, 320, 520, 201, false, [] { limitX10 = 900; fillSeries(Series::Dip); atTemp(199); ui_draw_soldering_basic_status(false); }},
-      {"l6_schlafcount", T, 320, 320, 150, 201, false, [] { fillSeries(Series::Steady); atTemp(199); lastMovementTime = previewTicks - 52000; ui_draw_soldering_basic_status(false); }},
-      {"l7_boost", 209000, 410, 320, 800, 201, false, [] { fillSeries(Series::Boost); currentTempTargetDegC = 420; ui_draw_soldering_basic_status(true); }},
-      {"l8_stopp", T, 320, 320, 150, 201, false, [] { fillSeries(Series::Steady); atTemp(199); pressed(false, 150 + 595); ui_draw_soldering_basic_status(false); }},
-      {"l9_druck_temp", T, 320, 320, 150, 201, false, [] { fillSeries(Series::Steady); atTemp(199); pressed(true, 100); ui_draw_soldering_basic_status(false); }},
-      {"r2_bereit_gedreht", T, 320, 320, 150, 201, false, [] { orient(false); fillSeries(Series::Steady); atTemp(199); ui_draw_soldering_basic_status(false); }},
-      {"d1_details", T, 318, 320, 520, 201, false, [] { fillSeries(Series::Steady); atTemp(199); ui_draw_soldering_power_status(false); }},
-      {"d2_details_einbruch", T, 291, 320, 780, 201, false, [] { fillSeries(Series::Drop); atTemp(199); ui_draw_soldering_power_status(false); }},
-      {"t1_temp", T, 318, 320, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
-      {"t2_preset300", T, 318, 300, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
-      {"t3_preset350", T, 318, 350, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
-      {"t4_preset400", T, 318, 400, 150, 201, false, [] { fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
-      {"t5_halten", T, 318, 320, 150, 201, false, [] { fillSeries(Series::Steady); pressed(true, 150 + 270); dogDrawTemperatureView(true); }},
-      {"r3_temp_gedreht", T, 318, 350, 150, 201, false, [] { orient(false); fillSeries(Series::Steady); dogDrawTemperatureView(true); }},
       {"s6_temp", T, 26, 320, 0, 201, false, [] { dogDrawTemperatureView(false); }},
   };
 }

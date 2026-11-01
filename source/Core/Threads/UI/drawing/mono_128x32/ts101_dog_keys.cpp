@@ -75,14 +75,14 @@ static const uint8_t RING_WIDTH = 5;
 uint8_t dogBigWidth(uint16_t value) {
   char text[6];
   dogFormat(text, value);
-  return dogTextWidth(dogFontBig, text) + 1 + RING_WIDTH;
+  return dogTextWidth(dogFontBig, text) + 2 + RING_WIDTH;
 }
 
 void dogBig(int16_t x, uint16_t value) {
   char text[6];
   dogFormat(text, value);
-  dogText(dogFontBig, x, 22, text);
-  dogBlit(x + dogTextWidth(dogFontBig, text) + 1, 1, RING_WIDTH, 8, dogRing);
+  dogText(dogFontBig, x, 20, text);
+  dogBlit(x + dogTextWidth(dogFontBig, text) + 2, 0, RING_WIDTH, 8, dogRing);
 }
 
 void dogBigRight(int16_t x1, uint16_t value) { dogBig(x1 - dogBigWidth(value) + 1, value); }
@@ -92,11 +92,13 @@ static TickType_t heldSince[2];  // 0 = front, 1 = rear; 0 ticks = not held
 static bool       bothDown = false; // both buttons were down: lock or back, the one released last must not start anything
 static uint8_t    consumed = 0;    // >0: the press has done its job. Counts down after the release, so its click event is hidden too
 static bool       locked   = false;
+static bool       bothNow  = false; // both buttons are down right now, whatever else is going on
 
 ButtonState dogButtonsPoll(ButtonState buttons) {
   const bool swapped = getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled);
   const bool a       = swapped ? getButtonB() : getButtonA();
   const bool b       = swapped ? getButtonA() : getButtonB();
+  bothNow = a && b;
   if (a && b) {
     bothDown = true;
   } else if (!a && !b) {
@@ -114,6 +116,8 @@ ButtonState dogButtonsPoll(ButtonState buttons) {
   heldSince[1]    = (b && !idle) ? (heldSince[1] ? heldSince[1] : now) : 0;
   return masked ? BUTTON_NONE : buttons;
 }
+
+bool dogBothDown() { return bothNow; }
 
 bool dogPressed(bool front) { return heldSince[front ? 0 : 1] != 0; }
 
@@ -135,7 +139,7 @@ bool dogHoldDone(bool front, TickType_t full) { return dogHeldTicks(front) >= fu
 static const uint8_t KEY_ICON_WIDTH = 8;
 
 // Swap buttons swaps the roles of the two buttons, so the label of the "front" role moves to the other side with them
-static bool frontOnRight() { return OLED::getRotation() != (getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled) != 0); }
+bool dogFrontOnRight() { return OLED::getRotation() != (getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled) != 0); }
 
 int16_t dogFrontKeyX() { return OLED::getRotation() ? OLED_WIDTH - KEY_ICON_WIDTH : 0; }
 
@@ -145,7 +149,7 @@ static uint8_t textBase(uint8_t row) { return row ? row + 6 : 7; }
 
 // Returns the free column next to the key, towards the middle
 static int16_t drawKey(DogKey key, bool front, uint8_t row = DOG_KEY_ROW) {
-  const bool    right = front == frontOnRight();
+  const bool    right = front == dogFrontOnRight();
   const uint8_t textW = key.text ? dogTextWidth(dogFontSmall, key.text) : 0;
   const uint8_t w     = (key.icon ? KEY_ICON_WIDTH : 0) + (key.icon && key.text ? 1 : 0) + textW;
   if (right) {
@@ -175,16 +179,11 @@ static int16_t drawKey(DogKey key, bool front, uint8_t row = DOG_KEY_ROW) {
 void dogDrawKeys(DogKey front, DogKey rear, const char *centre) {
   const int16_t a  = drawKey(front, true);
   const int16_t b  = drawKey(rear, false);
-  const int16_t x0 = frontOnRight() ? b : a;
-  const int16_t x1 = frontOnRight() ? a : b;
+  const int16_t x0 = dogFrontOnRight() ? b : a;
+  const int16_t x1 = dogFrontOnRight() ? a : b;
   if (centre) {
     dogSmallCentre(x0, x1, centre);
   }
-}
-
-void dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon, uint8_t row) {
-  drawKey({frontIcon, nullptr}, true, row);
-  drawKey({rearIcon, nullptr}, false, row);
 }
 
 bool dogDrawHold(const char *text, bool front, TickType_t full, uint8_t row) {
@@ -199,7 +198,7 @@ bool dogDrawHold(const char *text, bool front, TickType_t full, uint8_t row) {
   OLED::drawFilledRect(0, fieldTop(row), OLED_WIDTH - 1, row + 7, true); // the bar takes the whole row
   dogSmallCentre(0, OLED_WIDTH - 1, text, textBase(row));
   if (filled) {
-    if (front == frontOnRight()) {
+    if (front == dogFrontOnRight()) {
       OLED::invertRect(OLED_WIDTH - filled, fieldTop(row), OLED_WIDTH - 1, row + 7);
     } else {
       OLED::invertRect(0, fieldTop(row), filled - 1, row + 7);

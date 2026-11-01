@@ -1,8 +1,8 @@
 /*
  * TS101_DOG_UI: the flat settings menu, as lists of three rows: name on the left, value on the right. Seven points, one
- * level below them, and every value saves itself when it is left. The rear button always goes back, click or hold. The
- * front button moves on with a click; held, it opens a list, flips a switch or makes the value in the row editable, where a
- * click raises it and wraps round at the top.
+ * level below them, and every value saves itself when it is left. A rear click moves to the next row, holding it goes back.
+ * A front click opens a list, flips a switch or makes the value in the row editable; there the front button raises it,
+ * the rear button lowers it, holding the rear button is done, and after 4.5 s without a button it saves itself.
  * The position lives in this file, not in the scratch state: the temperature view and the info pages are modes of their own.
  */
 #include "OperatingModes.h"
@@ -10,7 +10,7 @@
 #include "ui_drawing.hpp"
 #ifdef TS101_DOG_UI
 
-enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Step, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse };
+enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse };
 
 struct DogMenuItem {
   const char     *de, *en;
@@ -29,9 +29,8 @@ void dogSetResetSettings(void);
 static const DogMenuItem solderItems[] = {
     {"BOOST", "BOOST", "ZIEL, SOLANGE VORNE GEHALTEN WIRD", "TARGET WHILE THE FRONT BUTTON IS HELD", OPT(BoostTemp), Fmt::BoostTemp, nullptr},
     {"AUTOSTART", "AUTOSTART", "WAS BEIM EINSTECKEN PASSIERT", "WHAT HAPPENS WHEN POWERED ON", OPT(AutoStartMode), Fmt::Autostart, nullptr},
-    {"SCHRITT", "STEP", "SO VIEL ÄNDERT EIN KLICK DIE TEMPERATUR", "HOW MUCH ONE CLICK CHANGES THE TEMPERATURE", OPT(TempChangeLongStep), Fmt::Step, nullptr},
     {"SPITZE", "TIP", "WELCHE SPITZE STECKT, AUTO ERKENNT SIE SELBST", "WHICH TIP IS FITTED, AUTO DETECTS IT", OPT(SolderingTipType), Fmt::Tip, nullptr},
-    {"SPERRE", "LOCK", "BEIDE TASTEN HALTEN SPERRT BEIM LÖTEN", "HOLD BOTH BUTTONS TO LOCK WHILE SOLDERING", OPT(LockingMode), Fmt::Lock, nullptr},
+    {"SPERRE", "LOCK", "AM START BEIDE TASTEN HALTEN SPERRT DAS LÖTEN", "HOLD BOTH BUTTONS ON THE START TO LOCK SOLDERING", OPT(LockingMode), Fmt::Lock, nullptr},
 };
 static const DogMenuItem sleepItems[] = {
     {"BEWEGUNG", "MOTION", "WIE EMPFINDLICH DER KOLBEN BEWEGUNG BEMERKT", "HOW EASILY THE IRON NOTICES MOVEMENT", OPT(Sensitivity), Fmt::Stage, nullptr},
@@ -52,6 +51,8 @@ static const DogMenuItem displayItems[] = {
     {"INVERTIEREN", "INVERT", "HELL UND DUNKEL TAUSCHEN", "SWAP LIGHT AND DARK", OPT(OLEDInversion), Fmt::OnOff, nullptr},
     {"ANIMATION", "ANIMATION", "TEMPO DER MENÜ-SYMBOLE", "SPEED OF THE MENU ICONS", OPT(AnimationSpeed), Fmt::Animation, nullptr},
     {"LOGO", "LOGO", "WIE LANGE DAS BOOT-LOGO LÄUFT", "HOW LONG THE BOOT LOGO RUNS", OPT(LOGOTime), Fmt::Logo, nullptr},
+    {"START MIT HUND", "DOG ON START", "HUNDEKOPF AUF DEM STARTBILD", "DOG HEAD ON THE START SCREEN", OPT(DogHomeVariant), Fmt::OnOff, nullptr},
+    {"DETAILANSICHT", "DETAIL VIEW", "BEIM LÖTEN ALLE MESSWERTE STATT DER KURVE", "ALL READINGS WHILE SOLDERING, NOT THE CURVE", OPT(DogSolderView), Fmt::OnOff, nullptr},
 };
 static const DogMenuItem systemItems[] = {
     {"TEMP KALIBR.", "CALIBRATE TEMP", "BEIM NÄCHSTEN START, MIT KALTER SPITZE", "ON THE NEXT START, WITH A COLD TIP", OPT(CalibrateCJC), Fmt::OnOff, dogSetCalibrateCJC},
@@ -109,7 +110,6 @@ static void formatValue(const DogMenuItem &item, char *out) {
     break;
   case Fmt::Temp:
   case Fmt::SleepTemp:
-  case Fmt::Step:
     end = dogFormat(out, v);
     strcpy(end, "°");
     break;
@@ -300,7 +300,8 @@ static void stepValue(const DogMenuItem &item, bool up) {
 #define ROW_HEIGHT  8
 #define LIST_TOP    8   // row 0-7 is the fixed title with the keys
 #define TITLE_ROW   0
-#define VALUE_RIGHT 124 // values end here, the scroll bar is on column 127
+#define VALUE_RIGHT 120 // values end here
+#define MARK_RIGHT  124 // the inverted mark ends here, the scroll bar is on columns 126-127
 static uint8_t top = 0; // the first row on screen
 
 static bool isSwitch(const DogMenuItem &item) { return item.format == Fmt::OnOff || item.format == Fmt::Unit; }
@@ -347,16 +348,13 @@ static void drawRow(uint8_t section, uint8_t index, uint8_t row, bool selected, 
       formatValue(item, value);
       dogSmallRight(VALUE_RIGHT, value, base);
       if (editingValue) {
-        // Only the value is inverted while it changes, and it blinks so the row reads as "being changed"
-        if ((xTaskGetTickCount() / (TICKS_100MS * 4)) % 3) {
-          OLED::invertRect(VALUE_RIGHT - dogTextWidth(dogFontSmall, value) - 2, y0 + 1, VALUE_RIGHT + 1, y0 + 7);
-        }
+        OLED::invertRect(VALUE_RIGHT - dogTextWidth(dogFontSmall, value), y0 - 1, VALUE_RIGHT + 3, y0 + 7); // only the value, while it changes
         return;
       }
     }
   }
   if (selected) {
-    OLED::invertRect(0, y0 + 1, VALUE_RIGHT + 1, y0 + 7);
+    OLED::invertRect(0, y0 - 1, MARK_RIGHT, y0 + 7);
   }
 }
 
@@ -370,11 +368,14 @@ static void drawList(uint8_t section, uint8_t pos, bool editingValue) {
   for (uint8_t row = 0; row < ROWS && top + row < count; row++) {
     drawRow(section, top + row, row, top + row == pos, editingValue && top + row == pos);
   }
-  // Scroll bar: where the three rows are in the whole list
+  // Scroll bar: a line down the whole list with a thicker part where the mark is in it
   const uint8_t span = OLED_HEIGHT - LIST_TOP;
-  const uint8_t len  = count > ROWS ? span * ROWS / count : span;
-  const uint8_t y    = LIST_TOP + (count > ROWS ? (span - len) * top / (count - ROWS) : 0);
-  OLED::drawFilledRect(OLED_WIDTH - 1, y, OLED_WIDTH - 1, y + len - 1, false);
+  uint8_t       y    = LIST_TOP + pos * (span / count) + 1;
+  y                  = y > OLED_HEIGHT - 8 ? OLED_HEIGHT - 8 : y;
+  OLED::drawFilledRect(OLED_WIDTH - 1, LIST_TOP, OLED_WIDTH - 1, OLED_HEIGHT - 1, false);
+  if (!editingValue) {
+    OLED::drawFilledRect(OLED_WIDTH - 2, y, OLED_WIDTH - 2, y + 7, false);
+  }
 }
 
 // "SCHLAF 2/4": the name of the list and where the marked row is in it
@@ -389,12 +390,7 @@ static void formatTitle(uint8_t section, uint8_t pos, char *out) {
 
 // The fixed top row: back and next next to their buttons, the title between them; or the help text, or "saved"
 static void drawTitleRow(uint8_t section, uint8_t pos, const DogMenuItem *item) {
-  const char *holdDe = "HALTEN: ÖFFNEN", *holdEn = "HOLD: OPEN";
-  if (item && item->format != Fmt::Action) {
-    holdDe = isSwitch(*item) ? "HALTEN: UMSCHALTEN" : "HALTEN: ÄNDERN";
-    holdEn = isSwitch(*item) ? "HOLD: SWITCH" : "HOLD: CHANGE";
-  }
-  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL, TITLE_ROW) || dogDrawHold(T(holdDe, holdEn), true, DOG_HOLD_FULL, TITLE_ROW)) {
+  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL, TITLE_ROW)) {
     return;
   }
   const TickType_t now = xTaskGetTickCount();
@@ -410,14 +406,27 @@ static void drawTitleRow(uint8_t section, uint8_t pos, const DogMenuItem *item) 
     const char   *text  = T(item->helpDe, item->helpEn);
     const int16_t width = dogTextWidth(dogFontSmall, text) + 32;
     dogSmall(OLED_WIDTH - 10 - (int16_t)(((now - lastButtonTime - HELP_TICKS) / (TICKS_100MS / 2)) % (width + OLED_WIDTH - 20)), text, TITLE_ROW + 7);
-    OLED::drawFilledRect(0, TITLE_ROW, 9, TITLE_ROW + 7, true);
-    OLED::drawFilledRect(OLED_WIDTH - 10, TITLE_ROW, OLED_WIDTH - 1, TITLE_ROW + 7, true);
+    OLED::drawFilledRect(0, TITLE_ROW, 12, TITLE_ROW + 7, true);
+    OLED::drawFilledRect(OLED_WIDTH - 13, TITLE_ROW, OLED_WIDTH - 1, TITLE_ROW + 7, true);
   } else {
     char title[24];
     formatTitle(section, pos, title);
-    dogSmallCentre(10, OLED_WIDTH - 11, title, TITLE_ROW + 7);
+    dogSmallCentre(0, OLED_WIDTH - 1, title, TITLE_ROW + 7);
   }
-  dogDrawCorners(iconNext, iconBack, TITLE_ROW);
+  // Next row on the rear button's side, OK on the front button's
+  const bool    frontRight = dogFrontOnRight();
+  const int16_t downX      = frontRight ? 0 : OLED_WIDTH - 7;
+  for (uint8_t i = 0; i < 4; i++) {
+    OLED::drawFilledRect(downX + i, 2 + i, downX + 6 - i, 2 + i, false);
+  }
+  const int16_t okX = frontRight ? OLED_WIDTH - 12 : 0;
+  dogSmall(okX, "OK", TITLE_ROW + 7);
+  if (dogPressed(true)) {
+    OLED::invertRect(frontRight ? okX - 1 : 0, 0, frontRight ? OLED_WIDTH - 1 : 11, 7);
+  }
+  if (dogPressed(false)) {
+    OLED::invertRect(frontRight ? 0 : OLED_WIDTH - 8, 0, frontRight ? 7 : OLED_WIDTH - 1, 7);
+  }
 }
 
 void dogDrawMenuList(uint8_t section, uint8_t pos) {
@@ -430,16 +439,26 @@ void dogDrawMenuValue(uint8_t section, uint8_t pos) {
   if (dogDrawHold(T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL, TITLE_ROW)) {
     return;
   }
-  dogDrawCorners(iconPlus, iconBack, TITLE_ROW);
-  // Runs down over the 2 s until the value saves itself
+  // "-" on the rear button's side, "+" on the front button's, between them the time until the value saves itself
+  const bool    frontRight = dogFrontOnRight();
+  const int16_t minusX = frontRight ? 0 : OLED_WIDTH - 5, plusX = frontRight ? OLED_WIDTH - 5 : 0;
+  OLED::drawFilledRect(minusX, 3, minusX + 4, 3, false);
+  OLED::drawFilledRect(plusX, 3, plusX + 4, 3, false);
+  OLED::drawFilledRect(plusX + 2, 1, plusX + 2, 5, false);
+  if (dogPressed(true)) {
+    OLED::invertRect(frontRight ? OLED_WIDTH - 6 : 0, 0, frontRight ? OLED_WIDTH - 1 : 5, 6);
+  }
+  if (dogPressed(false)) {
+    OLED::invertRect(frontRight ? 0 : OLED_WIDTH - 6, 0, frontRight ? 5 : OLED_WIDTH - 1, 6);
+  }
   const TickType_t idle = xTaskGetTickCount() - lastButtonTime;
-  const uint8_t    fill = idle >= DOG_ADJUST_TIMEOUT ? 0 : (44 * (DOG_ADJUST_TIMEOUT - idle)) / DOG_ADJUST_TIMEOUT;
-  OLED::drawFilledRect(40, 2, 88, 2, false);
-  OLED::drawFilledRect(40, 5, 88, 5, false);
-  OLED::drawFilledRect(40, 2, 40, 5, false);
-  OLED::drawFilledRect(88, 2, 88, 5, false);
+  const uint8_t    fill = idle >= DOG_VALUE_TIMEOUT ? 0 : (64 * (uint32_t)(DOG_VALUE_TIMEOUT - idle)) / DOG_VALUE_TIMEOUT;
+  OLED::drawFilledRect(30, 1, 97, 1, false);
+  OLED::drawFilledRect(30, 5, 97, 5, false);
+  OLED::drawFilledRect(30, 1, 30, 5, false);
+  OLED::drawFilledRect(97, 1, 97, 5, false);
   if (fill) {
-    OLED::drawFilledRect(42, 3, 42 + fill, 4, false);
+    OLED::drawFilledRect(32, 3, 31 + fill, 3, false);
   }
 }
 
@@ -500,7 +519,7 @@ static void leaveValue() {
 static OperatingMode editValue(const ButtonState buttons, guiContext *cxt) {
   const DogMenuItem &item = sections[openSection].items[position];
   dogDrawMenuValue(openSection, position);
-  if (buttons == BUTTON_B_SHORT || buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
+  if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     leaveValue();
     return OperatingMode::SettingsMenu;
@@ -514,11 +533,11 @@ static OperatingMode editValue(const ButtonState buttons, guiContext *cxt) {
     }
     return OperatingMode::SettingsMenu;
   }
-  if (buttons == BUTTON_F_SHORT) {
-    stepValue(item, true);
+  if (buttons == BUTTON_F_SHORT || buttons == BUTTON_B_SHORT) {
+    stepValue(item, buttons == BUTTON_F_SHORT);
     changed = true;
   }
-  if (xTaskGetTickCount() - lastButtonTime > DOG_ADJUST_TIMEOUT) {
+  if (xTaskGetTickCount() - lastButtonTime > DOG_VALUE_TIMEOUT) {
     leaveValue();
   }
   return OperatingMode::SettingsMenu;
@@ -558,15 +577,14 @@ OperatingMode gui_SettingsMenu(const ButtonState buttonsIn, guiContext *cxt) {
     helpShowing = false;
     buttons     = BUTTON_NONE; // the key row wasn't showing, so this click can't have meant what it does
   }
-  if (buttons == BUTTON_B_SHORT || buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
+  if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     return leaveList(cxt);
   }
   const uint8_t count = openSection == NO_SECTION ? SECTION_COUNT : sections[openSection].count;
-  if (buttons == BUTTON_F_SHORT) {
+  if (buttons == BUTTON_B_SHORT) {
     position = (position + 1) % count; // only the marked row moves: no screen transition
-  } else if (dogHoldDone(true, DOG_HOLD_FULL)) {
-    dogPressConsumed();
+  } else if (buttons == BUTTON_F_SHORT) {
     if (openSection == NO_SECTION) {
       if (position == 0) {
         cxt->transitionMode = TransitionAnimation::Left;

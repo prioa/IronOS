@@ -82,9 +82,10 @@ enum SettingsOptions {
   LEDMode                        = 57, // Status LED mode
   CalibrationOffset2             = 58, // Calibration offset for the second tip socket
   TotalSolderMinutes             = 59, // Lifetime minutes at soldering temperature (TS101_DOG_UI, no menu entry)
-  DogSolderView                  = 60, // Soldering view picked with the back button (TS101_DOG_UI, no menu entry)
+  DogSolderView                  = 60, // Detail view while soldering (TS101_DOG_UI)
+  DogHomeVariant                 = 61, // Dog head on the home screen (TS101_DOG_UI)
   //
-  SettingsOptionsLength = 61, // End marker
+  SettingsOptionsLength = 62, // End marker
 };
 
 // For every setting we need to store the min/max/increment values

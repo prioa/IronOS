@@ -13,6 +13,34 @@
 #define SCRATCH_ADJUST_OPEN  2 // state 6 bit: the temperature view is showing; the heater stays on
 static TickType_t boostEndedAt = 0;
 
+static TickType_t boostStartedAt = 0; // 0 = no boost running
+static bool       boostUsedUp    = false; // ran for the longest it may: stays off until the button is let go
+
+uint8_t dogBoostSecondsLeft() {
+  const TickType_t ran = boostStartedAt ? xTaskGetTickCount() - boostStartedAt : 0;
+  return ran >= DOG_BOOST_MAX ? 0 : (DOG_BOOST_MAX - ran + TICKS_SECOND - 1) / TICKS_SECOND;
+}
+
+// Boost has a time limit; wherever the button handling turned it on, locked or not, it goes through here
+static void limitBoost(const ButtonState buttons, guiContext *cxt) {
+  if (cxt->scratch_state.state2) {
+    const TickType_t now = xTaskGetTickCount() | 1;
+    if (!boostStartedAt && !boostUsedUp) {
+      boostStartedAt = now;
+    }
+    if (boostUsedUp || now - boostStartedAt >= DOG_BOOST_MAX) {
+      boostUsedUp               = true;
+      boostStartedAt            = 0;
+      cxt->scratch_state.state2 = 0;
+    }
+  } else {
+    boostStartedAt = 0;
+    if (buttons != BUTTON_F_LONG) {
+      boostUsedUp = false;
+    }
+  }
+}
+
 static bool boostJustEnded() { return boostEndedAt && (xTaskGetTickCount() - boostEndedAt) < DOG_BOOST_CLICK_GUARD; }
 
 // Front handles, rear leads: a click only ever opens something or changes the view, never the heater
@@ -37,34 +65,16 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
     cxt->scratch_state.state2 = 0;
     cxt->scratch_state.state1 = 0;
     break;
-  case BUTTON_BOTH:
-    cxt->transitionMode = TransitionAnimation::Right;
-    return OperatingMode::HomeScreen;
   case BUTTON_F_LONG:
     if (getSettingValue(SettingsOptions::BoostTemp) && dogPressed(true)) {
       cxt->scratch_state.state2 = 1;
     }
     break;
   case BUTTON_F_SHORT:
+  case BUTTON_B_SHORT:
     if (!boostJustEnded()) {
       cxt->scratch_state.state6 |= SCRATCH_ADJUST_OPEN;
       dogAdjustOpened();
-    }
-    break;
-  case BUTTON_B_SHORT:
-    if (!boostJustEnded()) {
-      dogNextSolderView();
-    }
-    break;
-  case BUTTON_BOTH_LONG:
-    if (getSettingValue(SettingsOptions::LockingMode)) {
-      if (cxt->scratch_state.state1 == 0) {
-        if (dogWarnLocked(true, buttons)) {
-          cxt->scratch_state.state1 = 2;
-        }
-      } else {
-        dogWarnLocked(false, buttons);
-      }
     }
     break;
   default:
@@ -85,6 +95,14 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
 #endif
 
 OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt) {
+#ifdef TS101_DOG_UI
+  // Both buttons always stop at once: while locked, during boost, with the temperature view open
+  if (dogBothDown()) {
+    dogPressConsumed();
+    cxt->transitionMode = TransitionAnimation::Right;
+    return OperatingMode::HomeScreen;
+  }
+#endif
   if (cxt->scratch_state.state1 >= 2) {
     // Buttons are currently locked
     if (buttons == BUTTON_BOTH_LONG) {
@@ -197,7 +215,11 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
       dogCurveReset();
     }
   }
+  if (dogLockArmed && cxt->scratch_state.state1 < 2) {
+    cxt->scratch_state.state1 = 2; // switched on at the start, it holds for the whole session, also after sleep
+  }
   dogSetLocked(cxt->scratch_state.state1 >= 2);
+  limitBoost(buttons, cxt);
 #endif
 
   // Update the setpoints for the temperature
@@ -227,7 +249,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #ifdef TS101_DOG_UI
     if (!dogSolderTimerStart) {
       dogSolderTimerStart = xTaskGetTickCount() | 1; // never 0, that means "not started"
-      dogBarkUntil        = xTaskGetTickCount() + TICKS_SECOND * 2;
+      dogReachedUntil     = xTaskGetTickCount() + TICKS_100MS * 2;
     }
 #endif
     setStatusLED(LED_HOT);

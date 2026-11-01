@@ -11,8 +11,14 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
     cxt->scratch_state.state5 = 1;
     dogSleepEnterTime         = xTaskGetTickCount(); // the dog lies down, then falls asleep
   }
-  if (dogPressed(true) || dogPressed(false)) {
-    dogPressConsumed(); // the press that wakes the iron does nothing else: it must not stop the heater or open a view
+  if (dogBothDown() || dogHoldDone(false, DOG_HOLD_STOP)) {
+    dogPressConsumed();
+    currentTempTargetDegC = 0;
+    cxt->transitionMode   = TransitionAnimation::Right;
+    return OperatingMode::HomeScreen; // heater off, to the start
+  }
+  if (dogPressed(true)) {
+    dogPressConsumed(); // the press that wakes the iron does nothing else: it must not start a boost or open a view
   }
   if (dogHandleTooHot()) {
     currentTempTargetDegC = 0; // the handle limit holds in sleep too, the sleep temperature still heats
@@ -50,6 +56,12 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
     ui_draw_soldering_basic_sleep(tipTemp);
   }
 
+#ifdef TS101_DOG_UI
+  // The rear button may be on its way to a stop: only letting go wakes the iron, even if it moves meanwhile
+  if (dogPressed(false)) {
+    return cxt->scratch_state.state4 ? OperatingMode::Hibernating : OperatingMode::Sleeping;
+  }
+#endif
   if (!shouldBeSleeping()) {
     return cxt->previousMode;
   }

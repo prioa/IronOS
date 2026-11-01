@@ -15,9 +15,9 @@ typedef struct {
 } DogFont;
 
 extern const DogFont dogFontBig;
-extern const DogFont dogFontMid;
 extern const DogFont dogFontHead;
 extern const DogFont dogFontSmall;
+extern const DogFont dogFontLabel;
 
 extern const uint8_t dogRing[5];
 extern const uint8_t iconUpDown[8];
@@ -26,7 +26,8 @@ extern const uint8_t iconMenu[8];
 extern const uint8_t iconPlus[8];
 extern const uint8_t iconMinus[8];
 extern const uint8_t iconNext[8];
-extern const uint8_t iconHot[9];
+extern const uint8_t iconHot[7];
+extern const uint8_t iconReady[8];
 extern const uint8_t iconBack[8];
 extern const uint8_t iconCheck[8];
 extern const uint8_t iconLock[72];

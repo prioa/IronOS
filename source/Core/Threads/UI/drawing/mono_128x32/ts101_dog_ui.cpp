@@ -5,11 +5,9 @@
 
 TickType_t dogSolderTimerStart = 0;
 uint16_t   dogHeatupStartTempC = 0;
-TickType_t dogBarkUntil        = 0;
+TickType_t dogReachedUntil     = 0;
 TickType_t dogSleepEnterTime   = 0;
 uint32_t   dogLastSessionSeconds = 0;
-
-void dogDrawWuff(int16_t x, int8_t y) { OLED::drawArea(x, y, DOG_WUFF_WIDTH, 8, dogWuff); }
 
 void dogDrawRunning(int16_t x, int8_t y) {
   static const uint8_t cycle[] = {0, 1, 2, 3, 2, 1}; // stretched to gathered and back
@@ -20,12 +18,6 @@ void dogDrawRunAcross() {
   const uint32_t lap  = TICKS_SECOND * 2;
   const int32_t  span = OLED_WIDTH + DOG_RUN_WIDTH;
   dogDrawRunning((int32_t)((xTaskGetTickCount() % lap) * span / lap) - DOG_RUN_WIDTH, 0);
-}
-
-void dogDrawFlame(int16_t x) {
-  if ((xTaskGetTickCount() / (TICKS_100MS * 5)) % 2 == 0) {
-    OLED::drawArea(x, 0, 8, 8, iconFlame);
-  }
 }
 
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor) {
@@ -60,7 +52,7 @@ void dogDrawNotice(const uint8_t *icon, const char *word, const char *footer) {
 }
 
 bool dogWarnLocked(bool locked, ButtonState buttons) {
-  dogDrawNotice(iconLock, locked ? DOG_T("GESPERRT", "LOCKED") : DOG_T("OFFEN", "OPEN"), locked ? DOG_T("LÖSEN: BEIDE HALTEN", "UNLOCK: HOLD BOTH") : DOG_T("TASTEN FREI", "BUTTONS FREE"));
+  dogDrawNotice(iconLock, locked ? DOG_T("GESPERRT", "LOCKED") : DOG_T("OFFEN", "OPEN"), locked ? DOG_T("LÖSEN: AM START", "UNLOCK: ON THE START") : DOG_T("TASTEN FREI", "BUTTONS FREE"));
   if ((xTaskGetTickCount() - lastButtonTime) > TICKS_SECOND * 5) {
     return true;
   }
@@ -68,6 +60,7 @@ bool dogWarnLocked(bool locked, ButtonState buttons) {
 }
 
 DogAlert dogAlert = DogAlert::None;
+bool     dogLockArmed = false;
 
 const char *dogTipName() {
   // The order of tipType_t for the TS101: auto, then the three T12 tunings
@@ -115,22 +108,14 @@ void dogCurveSample(uint16_t tipC, TickType_t interval) {
 }
 
 void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots) {
-  int32_t lo = (int32_t)setC - 45, hi = (int32_t)setC + 15; // zoomed in round the set point so dips while soldering show up
+  int32_t lo = (int32_t)setC - 45, hi = setC; // zoomed in below the set point so dips while soldering show up
   if (range == DogCurve::Heat) {
     lo = 20;
-    hi = (int32_t)setC + 5;
   } else if (range == DogCurve::Cool) {
-    lo = 20;
+    lo = 50;
     hi = 60;
     for (uint8_t i = 0; i < curveCount; i++) {
       hi = curve[i] > hi ? curve[i] : hi;
-    }
-  } else if (range == DogCurve::Boost) {
-    lo = (int32_t)setC - 120;
-    hi = (int32_t)setC + 10;
-  } else {
-    for (uint8_t i = 0; i < curveCount; i++) {
-      hi = curve[i] > hi ? curve[i] : hi; // overshoot grows the range upwards
     }
   }
   auto toY = [&](int32_t v) -> uint8_t {
@@ -139,7 +124,7 @@ void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC,
   };
   if (dots) {
     const uint8_t setY = toY(setC);
-    for (int16_t x = x0; x <= x1; x += 3) {
+    for (int16_t x = x0; x <= x1; x += 2) {
       OLED::drawFilledRect(x, setY, x, setY, false);
     }
   }
@@ -184,11 +169,6 @@ void dogCountSolderTime() {
       settingsUnsaved = true;
     }
   }
-}
-
-void dogNextSolderView() {
-  setSettingValue(SettingsOptions::DogSolderView, (getSettingValue(SettingsOptions::DogSolderView) + 1) % 2);
-  settingsUnsaved = true;
 }
 
 void dogSettingsChanged() { settingsUnsaved = true; }

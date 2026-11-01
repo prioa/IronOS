@@ -21,7 +21,7 @@ static void selectNextPreset() {
 
 static void stepSetPoint(bool up) {
   const bool    inF  = getSettingValue(SettingsOptions::TemperatureInF);
-  const int16_t step = getSettingValue(SettingsOptions::TempChangeLongStep); // 10 by default; a hold jumps a preset, so this is the only step
+  const int16_t step = 5; // a hold jumps a preset, so this is the only step
   const int16_t now  = getSettingValue(SettingsOptions::SolderingTemp);
   // To the next multiple of the step in that direction
   int16_t next = up ? (now / step + 1) * step : ((now - 1) / step) * step;

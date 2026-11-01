@@ -11,14 +11,12 @@
 // Soldering session state, kept across trips through sleep and temperature adjust (driven by Soldering.cpp / Sleep.cpp)
 extern TickType_t dogSolderTimerStart; // tick the set point was first reached, 0 = still heating up
 extern uint16_t   dogHeatupStartTempC; // tip temperature when heating up started
-extern TickType_t dogBarkUntil;        // the dog barks "WUFF!" until this tick
+extern TickType_t dogReachedUntil;     // the screen stays inverted until this tick: the set point was just reached
 extern TickType_t dogSleepEnterTime;   // when sleep started, for the lie down animation
 extern uint32_t   dogLastSessionSeconds; // length of the last soldering session, for the home screen
 
-void dogDrawWuff(int16_t x, int8_t y);                  // y must be on a page boundary
 void dogDrawRunning(int16_t x, int8_t y);               // running dog, any position; clipped at the screen edge
 void dogDrawRunAcross();                                // the dog runs across the stage of the whole screen
-void dogDrawFlame(int16_t x);                           // blinking flame in the top row, marks soldering mode
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor); // major:mm
 
 // OR a sprite (page format, height a multiple of 8) onto the screen at any position, keeping what is under it
@@ -57,18 +55,20 @@ struct DogKey {
 };
 #define DOG_HOLD_START (TICKS_100MS * 3 / 2) // shorter presses only invert the field; the bar starts after this
 #define DOG_HOLD_FULL  (TICKS_100MS * 6)     // the bar is full and the action fires
-#define DOG_HOLD_STOP  (TICKS_SECOND)        // the same for switching the heater off
+#define DOG_HOLD_STOP  (TICKS_SECOND / 2)    // the same for switching the heater off
+#define DOG_BOOST_MAX  (TICKS_SECOND * 30)   // boost ends by itself after this, even with the button still down
+#define DOG_VALUE_TIMEOUT (TICKS_SECOND * 9 / 2) // the value in the menu saves itself after this long without a button
 
 // Once per frame, follows the buttons themselves (getButtonA/getButtonB); hides the events of a consumed press
 ButtonState dogButtonsPoll(ButtonState buttons);
+bool       dogBothDown();                   // both are down right now, also during a consumed press or a lock
+bool       dogFrontOnRight();               // which side the front button's label goes on
 bool       dogPressed(bool front);          // down on its own, and not left over from the previous screen
 TickType_t dogHeldTicks(bool front);        // how long it has been down, 0 if not dogPressed
 void       dogPressConsumed();              // the press did its job: it counts for nothing more until released
 void       dogSetLocked(bool locked);       // button lock: no field inverts and no bar fills
-int16_t    dogFrontKeyX();                  // the column of the key icon on the front button's side
 void       dogDrawKeys(DogKey front, DogKey rear, const char *centre);       // words and icons, inverted while pressed
 #define DOG_KEY_ROW 24 // the key row; the menu puts its keys in the top row (0) instead
-void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon, uint8_t row = DOG_KEY_ROW); // icons only, inverted while pressed
 // While held long enough, replaces the key row: text with a bar filling from the button's side. True if it drew
 bool       dogDrawHold(const char *text, bool front, TickType_t full, uint8_t row = DOG_KEY_ROW);
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
@@ -101,16 +101,18 @@ void dogCurveReset();
 #define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2 + TICKS_100MS / 2) // 4 samples a second: 18 s on screen while soldering
 #define DOG_COOL_SAMPLE_TICKS  (TICKS_SECOND * 5 / 2)                // one every 2.5 s: 3 minutes of cooling on the home screen
 void dogCurveSample(uint16_t tipC, TickType_t interval = DOG_CURVE_SAMPLE_TICKS);
-// The vertical range: round the set point, from room temperature, up to the boost target, from room temperature up to the hottest sample
-enum class DogCurve { Steady, Heat, Boost, Cool };
+// The vertical range: the 45 degrees below the set point, from room temperature up to the set point, from 50 C up to the hottest sample
+enum class DogCurve { Steady, Heat, Cool };
 // The last 18 s between the given columns and rows, newest on the right; dots = dotted set point line
 void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots);
 
 // Lifetime soldering time, counted while the set point is held and saved when back on the home screen
 void dogCountSolderTime();
 
-// Back button in soldering mode: dog <-> curve; kept in RAM and saved with the soldering time
-void dogNextSolderView();
+// Seconds of boost left, for the boost screen (set by Soldering.cpp)
+uint8_t dogBoostSecondsLeft();
+// Button lock, switched on the home screen for the soldering sessions that follow
+extern bool dogLockArmed;
 // A setting changed while soldering: saved with the soldering time on the home screen, sparing the flash
 void dogSettingsChanged();
 #endif
