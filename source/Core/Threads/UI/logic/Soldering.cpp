@@ -5,6 +5,37 @@
 // State 1 = button locking  (0:unlocked+released, 1:unlocked, 2:locked, 3:locked+released)
 // State 2 = boost mode
 // State 3 = buzzer timer
+// State 6 = TS101_DOG_UI session bookkeeping done for this entry
+
+#ifdef TS101_DOG_UI
+// Soldering session state that has to survive trips through sleep and temperature adjust
+TickType_t        dogSolderTimerStart = 0; // tick the set point was first reached, 0 = still heating up
+uint16_t          dogHeatupStartTempC = 0; // tip temperature when heating up started
+TickType_t        dogPresetShownUntil = 0; // the preset just picked is shown large until this tick
+static TickType_t dogFirstClickTime   = 0; // a single front click waiting to see if a second one follows
+
+#define DOG_DOUBLE_CLICK_TICKS (TICKS_100MS * 4)
+
+static void selectNextPreset() {
+  static const uint16_t presetsC[] = TS101_PRESETS_C;
+  static const uint16_t presetsF[] = TS101_PRESETS_F;
+  const bool            inF        = getSettingValue(SettingsOptions::TemperatureInF);
+  const uint16_t       *presets    = inF ? presetsF : presetsC;
+  const uint8_t         count      = sizeof(presetsC) / sizeof(presetsC[0]);
+  const uint16_t        current    = getSettingValue(SettingsOptions::SolderingTemp);
+  // Pick the first preset above the current set point, wrapping round to the lowest
+  uint16_t next = presets[0];
+  for (uint8_t i = 0; i < count; i++) {
+    if (presets[i] > current) {
+      next = presets[i];
+      break;
+    }
+  }
+  setSettingValue(SettingsOptions::SolderingTemp, next);
+  saveSettings();
+  dogPresetShownUntil = xTaskGetTickCount() + TICKS_SECOND;
+}
+#endif
 
 OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt) {
   if (cxt->scratch_state.state1 >= 2) {
@@ -55,6 +86,14 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
   case BUTTON_NONE:
     cxt->scratch_state.state2 = 0;
     cxt->scratch_state.state1 = 0;
+#ifdef TS101_DOG_UI
+    // No second click in time (and no button going down for one): it was a single click
+    if (dogFirstClickTime && !getButtonA() && !getButtonB() && (xTaskGetTickCount() - dogFirstClickTime) >= DOG_DOUBLE_CLICK_TICKS) {
+      dogFirstClickTime   = 0;
+      cxt->transitionMode = TransitionAnimation::Left;
+      return OperatingMode::TemperatureAdjust;
+    }
+#endif
     break;
   case BUTTON_BOTH:
   /*Fall through*/
@@ -68,6 +107,16 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
     }
     break;
   case BUTTON_F_SHORT:
+#ifdef TS101_DOG_UI
+    // Double click on the front button steps through the temperature presets
+    if (dogFirstClickTime) {
+      dogFirstClickTime = 0;
+      selectNextPreset();
+    } else {
+      dogFirstClickTime = xTaskGetTickCount();
+    }
+    break;
+#endif
   case BUTTON_B_SHORT:
     cxt->transitionMode = TransitionAnimation::Left;
     return OperatingMode::TemperatureAdjust;
@@ -105,6 +154,17 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
    * --> Double button to exit
    * --> Long hold double button to toggle key lock
    */
+#ifdef TS101_DOG_UI
+  if (!cxt->scratch_state.state6) {
+    cxt->scratch_state.state6 = 1;
+    dogFirstClickTime         = 0;
+    // A new session starts unless we are only back from sleeping or adjusting the set point
+    if (cxt->previousMode != OperatingMode::Sleeping && cxt->previousMode != OperatingMode::Hibernating && cxt->previousMode != OperatingMode::TemperatureAdjust) {
+      dogSolderTimerStart = 0;
+      dogHeatupStartTempC = TipThermoModel::getTipInC();
+    }
+  }
+#endif
 
   // Update the setpoints for the temperature
   if (cxt->scratch_state.state2) {
@@ -130,6 +190,11 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
       cxt->scratch_state.state3 = xTaskGetTickCount() + TICKS_SECOND / 3;
       cxt->scratch_state.state5 = true;
     }
+#ifdef TS101_DOG_UI
+    if (!dogSolderTimerStart) {
+      dogSolderTimerStart = xTaskGetTickCount() | 1; // never 0, that means "not started"
+    }
+#endif
     setStatusLED(LED_HOT);
   } else {
     setStatusLED(LED_HEATING);

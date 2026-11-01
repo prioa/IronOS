@@ -235,6 +235,11 @@
 // Offset (0xD3); without it the image renders shifted by half the screen height.
 #define OLED_DISPLAY_OFFSET_QUIRK 1
 
+// German Shepherd UI: sleeping dog, 128x32 boot logo, heat-up bar, presets, soldering timer
+#define TS101_DOG_UI 1
+#define TS101_PRESETS_C {300, 350, 400}
+#define TS101_PRESETS_F {570, 660, 750}
+
 #endif /* TS101 */
 
 #if defined(MODEL_TS80) + defined(MODEL_TS80P) > 0
@@ -298,7 +303,13 @@
 // I'm slightly suspect a watchdog or something runs out
 // as device resets before file finishes copying
 // So logo has to be located on page 99 or else it cant be flashed on stock bootloader
+#ifdef TS101_DOG_UI
+// 128x32 animated logos need more room: pages 95-99 (the app is limited to 95K in the Makefile)
+#define FLASH_LOGOADDR      (0x08000000 + (95 * 1024))
+#define FLASH_LOGO_LENGTH   (5 * 1024)
+#else
 #define FLASH_LOGOADDR      (0x08000000 + (99 * 1024))
+#endif
 #define SETTINGS_START_PAGE (0x08000000 + (127 * 1024))
 #else
 #define FLASH_LOGOADDR      (0x08000000 + (62 * 1024))

@@ -23,6 +23,11 @@ void BootLogo::handleShowingLogo(const uint8_t *ptrLogoArea) {
   } else if (ptrLogoArea[0] == 0xAA) {
     showNewFormat(ptrLogoArea + 1);
   }
+#ifdef TS101_DOG_UI
+  else if (ptrLogoArea[0] == 0xAB) {
+    showFullScreenFormat(ptrLogoArea + 1);
+  }
+#endif
 
   OLED::clearScreen();
 }
@@ -118,3 +123,71 @@ int BootLogo::showNewFrame(const uint8_t *ptrLogoArea) {
   OLED::refresh();
   return (length * 2) + 1;
 }
+
+#ifdef TS101_DOG_UI
+/*
+ * Full screen (128x32) animated logo, header byte 0xAB:
+ *   [0xAB][inter frame delay x4ms][frame]...[0x00]
+ * Each frame starts with a run count:
+ *   0x00       end of animation
+ *   0xFE       hold the previous frame for one more delay
+ *   0xFF       full frame, 512 bytes (4 pages x 128 columns)
+ *   1..0xFD    that many runs of [index hi][index lo][length][length bytes], index = page * 128 + column,
+ *              a run never crosses into the next page
+ */
+void BootLogo::showFullScreenFormat(const uint8_t *ptrLogoArea) {
+  if (getSettingValue(SettingsOptions::LOGOTime) == logoMode_t::SKIP) {
+    return;
+  }
+  uint8_t interFrameDelay = ptrLogoArea[0];
+  OLED::clearScreen();
+
+  int position = 1;
+  while (getButtonState() == BUTTON_NONE) {
+    int len = showFullScreenFrame(ptrLogoArea + position);
+    position += len;
+
+    if (interFrameDelay) {
+      osDelay(interFrameDelay * 4);
+    }
+
+    if (getSettingValue(SettingsOptions::LOGOTime) && (position >= (FLASH_LOGO_LENGTH - 2) || len == 0)) {
+      if (getSettingValue(SettingsOptions::LOGOTime) == logoMode_t::INFINITY) {
+        osDelay(4 * TICKS_100MS);
+        OLED::clearScreen();
+        position = 1;
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    delay();
+    return;
+  }
+}
+
+int BootLogo::showFullScreenFrame(const uint8_t *ptrLogoArea) {
+  uint8_t runs = ptrLogoArea[0];
+  if (runs == 0) {
+    return 0;
+  }
+  if (runs == 0xFE) {
+    return 1;
+  }
+  if (runs == 0xFF) {
+    OLED::drawArea(0, 0, OLED_WIDTH, OLED_HEIGHT, ptrLogoArea + 1);
+    OLED::refresh();
+    return 1 + (OLED_WIDTH * OLED_HEIGHT / 8);
+  }
+  int position = 1;
+  for (uint8_t r = 0; r < runs; r++) {
+    uint16_t index  = (ptrLogoArea[position] << 8) | ptrLogoArea[position + 1];
+    uint8_t  length = ptrLogoArea[position + 2];
+    OLED::drawArea(index % OLED_WIDTH, (index / OLED_WIDTH) * 8, length, 8, ptrLogoArea + position + 3);
+    position += 3 + length;
+  }
+  OLED::refresh();
+  return position;
+}
+#endif
