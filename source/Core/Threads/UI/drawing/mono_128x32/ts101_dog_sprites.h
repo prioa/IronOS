@@ -5,26 +5,47 @@
 
 #define DOG_LYING_WIDTH  72
 #define DOG_LYING_HEIGHT 24
-#define DOG_SIT_WIDTH    60
-#define DOG_SIT_HEIGHT   32
 #define DOG_WUFF_WIDTH   20
 #define DOG_CLOCK_WIDTH  8
 #define DOG_ZZZ_WIDTH    24
+#define DOG_HEAD_WIDTH   34
+#define DOG_HEAD_HEIGHT  32
+#define DOG_RUN_WIDTH    60
+#define DOG_RUN_HEIGHT   24
+#define DOG_RUN_FRAMES   4
 #define DOG_ZZZ_STEPS    3
 
+extern const uint8_t dogHead[];
+extern const uint8_t dogHeadWag[];
+extern const uint8_t dogHeadPant[];
+extern const uint8_t dogHeadBark[];
 extern const uint8_t dogLying[];
 extern const uint8_t dogLyingAwake[];
-extern const uint8_t dogSit[];
-extern const uint8_t dogSitWag[];
-extern const uint8_t dogSitPant[];
-extern const uint8_t dogSitBark[];
-extern const uint8_t dogSitSad[];
 extern const uint8_t dogWuff[];
 extern const uint8_t dogClock[];
 extern const uint8_t dogSigma[];
+extern const uint8_t iconFlame[];
+extern const uint8_t iconArrowDown8[];
+extern const uint8_t iconWarning[];
+extern const uint8_t iconThermo16[];
+extern const uint8_t iconThermo8[];
+extern const uint8_t iconBolt[];
+extern const uint8_t iconPaw[];
+extern const uint8_t iconPlay8[];
+extern const uint8_t iconGear8[];
+extern const uint8_t dogRun0[];
+extern const uint8_t dogRun1[];
+extern const uint8_t dogRun2[];
+extern const uint8_t dogRun3[];
 extern const uint8_t dogZzz0[];
 extern const uint8_t dogZzz1[];
 extern const uint8_t dogZzz2[];
 extern const uint8_t *const dogZzz[DOG_ZZZ_STEPS];
+extern const uint8_t *const dogRun[DOG_RUN_FRAMES];
+
+// 5x7 label font: glyphs in the order of dogLabelChars (UTF-8 for the umlauts and degree sign)
+#define DOG_LABEL_GLYPHS 49
+extern const char *const dogLabelChars[DOG_LABEL_GLYPHS];
+extern const uint8_t dogLabelFont[DOG_LABEL_GLYPHS * 5];
 
 #endif // TS101_DOG_SPRITES_H_

@@ -239,6 +239,7 @@
 #define TS101_DOG_UI 1
 #define TS101_PRESETS_C {300, 350, 400}
 #define TS101_PRESETS_F {570, 660, 750}
+#define TS101_PRESET_USES {"FÜR SMD + BLEILOT", "FÜR BLEIFREI LOT", "FÜR KABEL + MASSE"} // what each preset is for, shown when picking it
 
 #endif /* TS101 */
 

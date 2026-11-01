@@ -1,14 +1,18 @@
 """128x32 boot animation: format 0xAB (see BootLogo.cpp)."""
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image
-from gsd32 import walking, sitting
 
 AREA = 5 * 1024
+ART = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'art')
 
-def canvas(sprite, x, y=0):
-    c = Image.new('L', (128, 32), 0)
-    c.paste(sprite, (x, y), sprite)
-    return c
+def portrait(sprite, y, smoke=()):
+    """Draw on an upright 32x128 canvas and turn it onto the 128x32 panel, the top towards the tip (column 0)."""
+    c = Image.new('L', (32, 128), 0)
+    c.paste(sprite, (0, y), sprite)
+    for sx, sy in smoke:
+        if 0 <= sy < 128 and not c.getpixel((sx, sy)):
+            c.putpixel((sx, sy), 255)
+    return c.rotate(90, expand=True)
 
 def tobytes(img):  # 4 pages x 128 columns, LSB = top pixel
     px = img.load(); out = []
@@ -66,20 +70,24 @@ def decode(data):  # mirrors the firmware decoder
         assert pos < AREA
     return out
 
-def frames_ankommen():
-    f = []
-    xs = list(range(-66, 24, 5)) + [24]
-    for i, x in enumerate(xs):
-        f.append(canvas(walking(i % 6), x))
-    f.append(canvas(walking(0), 24))
-    sx = 34
-    f.append(canvas(sitting('ground'), sx))
-    for t in ['wag', 'ground'] * 3:
-        f.append(canvas(sitting(t), sx))
-    for k in range(3):
-        f.append(canvas(sitting('ground', tongue=True), sx))
-        f.append(canvas(sitting('ground'), sx))
-    f.append(canvas(sitting('ground', tongue=True), sx))
+# Where the dog stops on the upright canvas, and the cigarette tip relative to the sprite
+REST_Y = 72
+EMBER = (3, 21)
+
+def smoke_puffs(step):
+    """Puffs rising from the cigarette, drifting from side to side as they go; a new one every 6 steps."""
+    out = []
+    for start in range(step % 6, step + 1, 6):
+        h = 2 + (step - start) * 3
+        y = REST_Y + EMBER[1] - h
+        x = EMBER[0] + (1 if (h // 8) % 2 else 0)
+        out += [(x, y), (x, y - 1), (x + 1, y - 2)]
+    return out
+
+def frames_portrait():
+    dog = Image.open(os.path.join(ART, 'portrait_gucci.png')).convert('L').point(lambda v: 255 if v > 127 else 0)
+    f = [portrait(dog, y) for y in (128, 118, 108, 99, 91, 84, 79, 75, REST_Y)]  # walks in from the cable end, slowing down
+    f += [portrait(dog, REST_Y, smoke_puffs(i)) for i in range(36)]              # stands there smoking
     return f
 
 LOGO_ADDR = 0x08000000 + 95 * 1024  # FLASH_LOGOADDR with TS101_DOG_UI (configuration.h)
@@ -117,7 +125,7 @@ def merge(firmware_hex, logo, out_hex):
 
 if __name__ == '__main__':
     # usage: logo128.py <firmware.hex> <output.hex> [preview.gif]
-    fr = frames_ankommen()
+    fr = frames_portrait()
     data = encode(fr, 40)
     assert len(data) <= AREA, len(data)
     assert decode(data) == [tobytes(x) for x in fr]
@@ -126,5 +134,5 @@ if __name__ == '__main__':
     print('wrote', sys.argv[2])
     if len(sys.argv) > 3:
         sc = 5
-        big = [x.resize((128 * sc, 32 * sc), Image.NEAREST).convert('P') for x in fr]
+        big = [x.rotate(-90, expand=True).resize((32 * sc, 128 * sc), Image.NEAREST).convert('P') for x in fr]  # shown upright
         big[0].save(sys.argv[3], save_all=True, append_images=big[1:], duration=160, loop=0)

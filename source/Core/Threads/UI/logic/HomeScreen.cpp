@@ -57,7 +57,7 @@ OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
 
   currentTempTargetDegC = 0; // ensure tip is off
 #ifdef TS101_DOG_UI
-  dogSaveSolderTime(); // persist the lifetime soldering minutes counted in the last session
+  dogSessionEnded(); // remember the last session and persist the lifetime soldering minutes
 #endif
   getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0);
   uint32_t tipTemp = TipThermoModel::getTipInC();

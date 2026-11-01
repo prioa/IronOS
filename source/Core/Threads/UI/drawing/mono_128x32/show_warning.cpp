@@ -36,10 +36,10 @@ bool warnUser(const char *warning, const ButtonState buttons) {
   widest       = (chars > widest) ? chars : widest;
   int16_t left = 0;
 #ifdef TS101_DOG_UI
-  // A sad dog next to warnings that leave room for it
-  if (static_cast<int16_t>(widest * charWidth) <= OLED_WIDTH - DOG_SIT_WIDTH) {
-    dogDrawSitting(0, DogPose::Sad);
-    left = DOG_SIT_WIDTH;
+  // A warning triangle next to warnings that leave room for it
+  if (static_cast<int16_t>(widest * charWidth) <= OLED_WIDTH - 28) {
+    dogBlit(1, 4, 24, 24, iconWarning);
+    left = 28;
   }
 #endif
   int16_t x = left + (OLED_WIDTH - left - static_cast<int16_t>(widest * charWidth)) / 2;

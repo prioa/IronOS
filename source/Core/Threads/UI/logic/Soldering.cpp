@@ -9,10 +9,6 @@
 // State 6 = TS101_DOG_UI session bookkeeping done for this entry
 
 #ifdef TS101_DOG_UI
-static TickType_t dogFirstClickTime = 0; // a single front click waiting to see if a second one follows
-
-#define DOG_DOUBLE_CLICK_TICKS (TICKS_100MS * 4)
-
 static void selectNextPreset() {
   static const uint16_t presetsC[] = TS101_PRESETS_C;
   static const uint16_t presetsF[] = TS101_PRESETS_F;
@@ -29,7 +25,7 @@ static void selectNextPreset() {
     }
   }
   setSettingValue(SettingsOptions::SolderingTemp, next);
-  saveSettings();
+  dogSettingsChanged(); // saved on the home screen, not on every click
   dogPresetShownUntil = xTaskGetTickCount() + TICKS_SECOND;
 }
 #endif
@@ -83,14 +79,6 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
   case BUTTON_NONE:
     cxt->scratch_state.state2 = 0;
     cxt->scratch_state.state1 = 0;
-#ifdef TS101_DOG_UI
-    // No second click in time (and no button going down for one): it was a single click
-    if (dogFirstClickTime && !getButtonA() && !getButtonB() && (xTaskGetTickCount() - dogFirstClickTime) >= DOG_DOUBLE_CLICK_TICKS) {
-      dogFirstClickTime   = 0;
-      cxt->transitionMode = TransitionAnimation::Left;
-      return OperatingMode::TemperatureAdjust;
-    }
-#endif
     break;
   case BUTTON_BOTH:
   /*Fall through*/
@@ -105,16 +93,16 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
     break;
   case BUTTON_F_SHORT:
 #ifdef TS101_DOG_UI
-    // Double click on the front button steps through the temperature presets
-    if (dogFirstClickTime) {
-      dogFirstClickTime = 0;
-      selectNextPreset();
-    } else {
-      dogFirstClickTime = xTaskGetTickCount();
-    }
+    // The front button steps through the temperature presets
+    selectNextPreset();
     break;
 #endif
   case BUTTON_B_SHORT:
+#ifdef TS101_DOG_UI
+    // The back button steps through the soldering views
+    dogNextSolderView();
+    break;
+#endif
     cxt->transitionMode = TransitionAnimation::Left;
     return OperatingMode::TemperatureAdjust;
   case BUTTON_BOTH_LONG:
@@ -154,7 +142,6 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #ifdef TS101_DOG_UI
   if (!cxt->scratch_state.state6) {
     cxt->scratch_state.state6 = 1;
-    dogFirstClickTime         = 0;
     if (cxt->previousMode == OperatingMode::Sleeping || cxt->previousMode == OperatingMode::Hibernating) {
       dogWakeUntil = xTaskGetTickCount() + TICKS_SECOND;
     } else if (cxt->previousMode != OperatingMode::TemperatureAdjust) {
@@ -209,11 +196,19 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
   dogCountSolderTime();
 #endif
   // Draw in the screen details
+#ifdef TS101_DOG_UI
+  if (getSettingValue(SettingsOptions::DogSolderView) == 1) {
+    ui_draw_soldering_power_status(cxt->scratch_state.state2);
+  } else {
+    ui_draw_soldering_basic_status(cxt->scratch_state.state2);
+  }
+#else
   if (getSettingValue(SettingsOptions::DetailedSoldering)) {
     ui_draw_soldering_power_status(cxt->scratch_state.state2);
   } else {
     ui_draw_soldering_basic_status(cxt->scratch_state.state2);
   }
+#endif
 
   bool detailedView = getSettingValue(SettingsOptions::DetailedIDLE) && getSettingValue(SettingsOptions::DetailedSoldering);
   // Check if we should bail due to undervoltage for example

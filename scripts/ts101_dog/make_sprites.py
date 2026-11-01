@@ -1,8 +1,33 @@
-"""Generate source/Core/Threads/UI/drawing/mono_128x32/ts101_dog_sprites.h from the drawings in gsd32.py."""
+"""Generate source/Core/Threads/UI/drawing/mono_128x32/ts101_dog_sprites.h from art/*.png and the drawings in gsd_extra.py."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image
-from gsd32 import lying, sitting
+from gsd32 import lying, running
+from gsd_extra import triangle, FLAME, ARROW_DOWN_8, THERMO_16, THERMO_8, BOLT, PAW, PLAY_8, GEAR_8
+
+ART = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'art')
+
+def art(name):  # 1 bit master made from the photo, see art/README.md
+    return Image.open(os.path.join(ART, name)).convert('L').point(lambda v: 255 if v > 127 else 0)
+
+def edit(img, on=(), off=()):  # pixel edits on a copy; rectangles are (x0, y0, x1, y1), inclusive
+    out = img.copy()
+    for value, rects in ((0, off), (255, on)):
+        for x0, y0, x1, y1 in rects:
+            out.paste(value, (x0, y0, x1 + 1, y1 + 1))
+    return out
+
+# Poses of the head (kopf_b.png, 34x32)
+def head_bark(head):
+    return edit(head, off=[(12, 25, 22, 31)], on=[(14, 29, 19, 31)])
+
+def head_pant(head):  # tongue further out
+    return edit(head, on=[(14, 29, 19, 31)])
+
+def head_wag(head):  # happy: the right ear flicks
+    return edit(head, off=[(26, 0, 28, 2)])
+
+RUN_FRAMES = 4
 
 ZZZ_STEPS = [  # sleep "z Z Z" animation, 24x8, one page tall
     [(0, 4, 'z')],
@@ -38,6 +63,69 @@ def clock():  # 8x8 stopwatch icon
             if c == '#': img.putpixel((x, y + 1), 255)
     return img
 
+# 5x7 label font, one string per row; drawn with 1 px spacing (6 px advance)
+FONT5X7 = {
+    ' ': ["", "", "", "", "", "", ""],
+    'A': [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+    'B': ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
+    'C': [".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."],
+    'D': ["####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."],
+    'E': ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+    'F': ["#####", "#....", "#....", "####.", "#....", "#....", "#...."],
+    'G': [".###.", "#...#", "#....", "#.###", "#...#", "#...#", ".####"],
+    'H': ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+    'I': [".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."],
+    'J': ["..###", "...#.", "...#.", "...#.", "...#.", "#..#.", ".##.."],
+    'K': ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
+    'L': ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+    'M': ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
+    'N': ["#...#", "#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#"],
+    'O': [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+    'P': ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+    'Q': [".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#"],
+    'R': ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+    'S': [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+    'T': ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
+    'U': ["#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+    'V': ["#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."],
+    'W': ["#...#", "#...#", "#...#", "#.#.#", "#.#.#", "#.#.#", ".#.#."],
+    'X': ["#...#", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "#...#"],
+    'Y': ["#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."],
+    'Z': ["#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"],
+    'Ä': ["#...#", "", ".###.", "#...#", "#####", "#...#", "#...#"],
+    'Ö': ["#...#", "", ".###.", "#...#", "#...#", "#...#", ".###."],
+    'Ü': ["#...#", "", "#...#", "#...#", "#...#", "#...#", ".###."],
+    '?': [".###.", "#...#", "....#", "...#.", "..#..", "", "..#.."],
+    '0': [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
+    '1': ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
+    '2': [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+    '3': ["####.", "....#", "....#", ".###.", "....#", "....#", "####."],
+    '4': ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+    '5': ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+    '6': [".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."],
+    '7': ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+    '8': [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+    '9': [".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."],
+    '.': ["", "", "", "", "", "", "..#.."],
+    ':': ["", "..#..", "", "", "", "..#..", ""],
+    '-': ["", "", "", "#####", "", "", ""],
+    '/': ["....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."],
+    '!': ["..#..", "..#..", "..#..", "..#..", "..#..", "", "..#.."],
+    '+': ["", "..#..", "..#..", "#####", "..#..", "..#..", ""],
+    '%': ["##..#", "##..#", "...#.", "..#..", ".#...", "#..##", "#..##"],
+    '°': [".##..", "#..#.", "#..#.", ".##..", "", "", ""],
+}
+
+def label_font():  # glyph columns, 5 bytes per glyph, bit 0 = top row
+    out = []
+    for ch, rows in FONT5X7.items():
+        for x in range(5):
+            b = 0
+            for y, r in enumerate(rows):
+                if x < len(r) and r[x] == '#': b |= 1 << y
+            out.append(b)
+    return out
+
 SIGMA = ["######", "#.....", ".#....", "..#...", ".#....", "#.....", "######"]
 
 def sigma():  # 8x8 sum sign for the lifetime total
@@ -71,10 +159,13 @@ def c_array(name, img):
     return f'// {img.width}x{img.height}\nconst uint8_t {name}[] = {{\n  ' + ',\n  '.join(lines) + ',\n};\n'
 
 def sprites():
-    s = [('dogLying', lying()), ('dogLyingAwake', lying(awake=True)), ('dogSit', sitting()), ('dogSitWag', sitting('wag')),
-         ('dogSitPant', sitting(tongue=True)), ('dogSitBark', sitting(bark=True)), ('dogSitSad', sitting(sad=True)),
-         ('dogWuff', wuff()), ('dogClock', clock()), ('dogSigma', sigma())]
-    return s + [(f'dogZzz{i}', zzz(i)) for i in range(len(ZZZ_STEPS))]
+    head = art('kopf_b.png')
+    s = [('dogHead', head), ('dogHeadWag', head_wag(head)), ('dogHeadPant', head_pant(head)), ('dogHeadBark', head_bark(head)),
+         ('dogLying', lying()), ('dogLyingAwake', lying(awake=True)),
+         ('dogWuff', wuff()), ('dogClock', clock()), ('dogSigma', sigma()), ('iconFlame', FLAME), ('iconArrowDown8', ARROW_DOWN_8),
+         ('iconWarning', triangle()), ('iconThermo16', THERMO_16), ('iconThermo8', THERMO_8),
+         ('iconBolt', BOLT), ('iconPaw', PAW), ('iconPlay8', PLAY_8), ('iconGear8', GEAR_8)]
+    return s + [(f'dogRun{i}', running(i)) for i in range(RUN_FRAMES)] + [(f'dogZzz{i}', zzz(i)) for i in range(len(ZZZ_STEPS))]
 
 if __name__ == '__main__':
     here = os.path.dirname(os.path.abspath(__file__))
@@ -82,16 +173,23 @@ if __name__ == '__main__':
     sp = sprites()
     hdr = ['// Generated by scripts/ts101_dog/make_sprites.py - do not edit', '#ifndef TS101_DOG_SPRITES_H_',
            '#define TS101_DOG_SPRITES_H_', '#include <stdint.h>', '',
-           '#define DOG_LYING_WIDTH  72', '#define DOG_LYING_HEIGHT 24', '#define DOG_SIT_WIDTH    60',
-           '#define DOG_SIT_HEIGHT   32', '#define DOG_WUFF_WIDTH   20', '#define DOG_CLOCK_WIDTH  8',
-           '#define DOG_ZZZ_WIDTH    24', f'#define DOG_ZZZ_STEPS    {len(ZZZ_STEPS)}', '']
+           '#define DOG_LYING_WIDTH  72', '#define DOG_LYING_HEIGHT 24', '#define DOG_WUFF_WIDTH   20', '#define DOG_CLOCK_WIDTH  8',
+           '#define DOG_ZZZ_WIDTH    24', '#define DOG_HEAD_WIDTH   34', '#define DOG_HEAD_HEIGHT  32', '#define DOG_RUN_WIDTH    60', '#define DOG_RUN_HEIGHT   24', f'#define DOG_RUN_FRAMES   {RUN_FRAMES}', f'#define DOG_ZZZ_STEPS    {len(ZZZ_STEPS)}', '']
     hdr += [f'extern const uint8_t {name}[];' for name, _ in sp]
-    hdr += ['extern const uint8_t *const dogZzz[DOG_ZZZ_STEPS];', '', '#endif // TS101_DOG_SPRITES_H_', '']
+    hdr += ['extern const uint8_t *const dogZzz[DOG_ZZZ_STEPS];', 'extern const uint8_t *const dogRun[DOG_RUN_FRAMES];', '',
+            '// 5x7 label font: glyphs in the order of dogLabelChars (UTF-8 for the umlauts and degree sign)',
+            f'#define DOG_LABEL_GLYPHS {len(FONT5X7)}', 'extern const char *const dogLabelChars[DOG_LABEL_GLYPHS];',
+            'extern const uint8_t dogLabelFont[DOG_LABEL_GLYPHS * 5];', '', '#endif // TS101_DOG_SPRITES_H_', '']
     src = ['// Generated by scripts/ts101_dog/make_sprites.py - do not edit', '#include "configuration.h"',
            '#ifdef TS101_DOG_UI', '#include "ts101_dog_sprites.h"', '']
     src += [c_array(name, img) for name, img in sp]
-    src += ['const uint8_t *const dogZzz[DOG_ZZZ_STEPS] = {' + ', '.join(f'dogZzz{i}' for i in range(len(ZZZ_STEPS))) + '};',
-            '#endif', '']
+    src += ['const uint8_t *const dogZzz[DOG_ZZZ_STEPS] = {' + ', '.join(f'dogZzz{i}' for i in range(len(ZZZ_STEPS))) + '};', '']
+    src += ['const uint8_t *const dogRun[DOG_RUN_FRAMES] = {' + ', '.join(f'dogRun{i}' for i in range(RUN_FRAMES)) + '};', '']
+    chars = ', '.join('"' + ''.join(f'\\x{b:02X}' for b in c.encode()) + '"' for c in FONT5X7)
+    src += ['const char *const dogLabelChars[DOG_LABEL_GLYPHS] = {' + chars + '};']
+    font = label_font()
+    src += ['const uint8_t dogLabelFont[DOG_LABEL_GLYPHS * 5] = {'] + \
+           ['  ' + ', '.join(f'0x{b:02X}' for b in font[i:i + 20]) + ',' for i in range(0, len(font), 20)] + ['};', '#endif', '']
     open(target + '.h', 'w').write('\n'.join(hdr))
     open(target + '.cpp', 'w').write('\n'.join(src))
     print('wrote', os.path.normpath(target) + '.h/.cpp')
