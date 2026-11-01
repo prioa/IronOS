@@ -26,6 +26,7 @@ extern "C" {
 #include "settingsGUI.hpp"
 #include "stdlib.h"
 #include "string.h"
+#include "ts101_dog_ui.hpp"
 #include "ui_drawing.hpp"
 #ifdef POW_PD
 #include "USBPD.h"
@@ -45,6 +46,9 @@ OperatingMode guiHandleDraw(void) {
   OLED::clearScreen(); // Clear ready for render pass
   // Read button state
   ButtonState buttons = getButtonState();
+#ifdef TS101_DOG_UI
+  dogButtonsPoll();
+#endif
   // Enforce screen on if buttons pressed, movement, hot tip etc
   if (buttons != BUTTON_NONE) {
     OLED::setDisplayState(OLED::DisplayState::ON);

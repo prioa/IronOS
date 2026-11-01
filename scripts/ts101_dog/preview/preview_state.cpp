@@ -15,6 +15,7 @@
 static uint16_t settings[SettingsOptionsLength];
 static uint16_t tipC = 320, vX10 = 201;
 static bool     tipMissing = false;
+static bool     pinFront = false, pinRear = false;
 
 volatile TemperatureType_t                    currentTempTargetDegC = 320;
 expMovingAverage<uint32_t, wattHistoryFilter> x10WattHistory;
@@ -37,6 +38,8 @@ uint32_t          getSleepTimeout(void) { return 60 * TICKS_SECOND; }
 int32_t           getX10WattageLimits() { return 1000; }
 uint8_t           X10WattsToPWM(int32_t w, uint8_t) { return w > 255 ? 255 : w; }
 ButtonState       getButtonState() { return BUTTON_NONE; }
+uint8_t           getButtonA() { return pinFront; }
+uint8_t           getButtonB() { return pinRear; }
 bool              I2CBB1::I2C_RegisterWrite(uint8_t, uint8_t, uint8_t) { return true; }
 bool              I2CBB1::Mem_Write(uint16_t, uint16_t, const uint8_t *, uint16_t) { return true; }
 
@@ -47,7 +50,24 @@ void previewSetup() {
   ui_pre_render_assets();
 }
 
+// The named button has been down for ms milliseconds, as dogButtonsPoll saw it
+static void pressed(bool front, uint32_t ms) {
+  pinFront = pinRear = false;
+  dogButtonsPoll();
+  previewTicks -= ms;
+  (front ? pinFront : pinRear) = true;
+  dogButtonsPoll();
+  previewTicks += ms;
+  dogButtonsPoll();
+}
+
+// The TS101 has OLED_FLIP set, so getRotation() is the opposite of this flag; true is the mock's normal layout
+static void orient(bool frontRight) { OLED::inLeftHandedMode = !frontRight; }
+
 void previewApply(const PreviewScene &s) {
+  pinFront = pinRear = false;
+  dogButtonsPoll();
+  orient(true);
   tipC                                         = s.tipC;
   settings[SettingsOptions::SolderingTemp]     = s.setC;
   currentTempTargetDegC                        = s.setC;
@@ -74,7 +94,24 @@ static void fillCurve() {
 
 std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 200000; // a time well away from the occasional wag
+  const DogKey solderKey = {iconPlay8, "LÖTEN"}, menuKey = {iconMenu, "MENÜ"};
   return {
+      // Step 1: the key row (rows 23-31 are compared with the mock of the same name)
+      {"k_s1_start", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
+      {"k_s3_schwach", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "9V 18W!"); }},
+      {"k_s4_druck", T, 26, 320, 0, 201, false, [=] { pressed(true, 100); dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
+      {"k_s5_halten", T, 26, 320, 0, 201, false, [] { pressed(true, 150 + 270); dogDrawHold("HALTEN: TEMPERATUR", true, DOG_HOLD_FULL); }},
+      {"k_l8_stopp", T, 26, 320, 0, 201, false, [] { pressed(false, 150 + 595); dogDrawHold("HALTEN: STOPP", false, DOG_HOLD_STOP); }},
+      {"k_m9_halten", T, 26, 320, 0, 201, false, [] { pressed(false, 150 + 270); dogDrawHold("HALTEN: ZURÜCK", false, DOG_HOLD_FULL); }},
+      {"k_l9_druck_temp", T, 26, 320, 0, 201, false, [] { pressed(true, 100); dogDrawCorners(iconUpDown, iconInfo); }},
+      {"k_r1_start_gedreht", T, 26, 320, 0, 201, false, [=] { orient(false); dogDrawKeys(solderKey, menuKey, "20V 90W"); }},
+      {"k_m1_menu_temp", T, 26, 320, 0, 201, false, [] { dogDrawKeys({iconNext, "ÖFFNEN"}, {iconMenu, "WEITER"}, nullptr); }},
+      {"k_m4_item", T, 26, 320, 0, 201, false, [] { dogDrawKeys({iconPlus, "ÄNDERN"}, {iconMenu, "WEITER"}, nullptr); }},
+      {"k_m6_edit", T, 26, 320, 0, 201, false, [] { dogDrawCorners(iconPlus, iconMinus); }},
+      {"k_s6_big", T, 26, 320, 0, 201, false, [] { dogBig(dogTextWidth(dogFontSmall, "SOLL") + 2, 320); dogSmall(0, "SOLL", 15); }},
+      {"k_z1_mid", T, 26, 320, 0, 201, false, [] { dogText(dogFontMid, 127 - dogTextWidth(dogFontMid, "150") - 6, 16, "150"); }},
+      {"k_m1_head", T, 26, 320, 0, 201, false, [] { dogText(dogFontHead, (128 - dogTextWidth(dogFontHead, "TEMPERATUR")) / 2, 22, "TEMPERATUR"); dogSmall(0, "MENÜ", 7); dogSmallRight(127, "1/7", 7); }},
+      {"k_m8_zurueck", T, 26, 320, 0, 201, false, [] { dogText(dogFontHead, (128 - dogTextWidth(dogFontHead, "ZURÜCK")) / 2, 22, "ZURÜCK"); dogSmall(0, "SCHLAF", 7); dogSmallRight(127, "5/5", 7); }},
       {"a1_loeten_aufheizen", T, 180, 320, 900, 201, false, [] { ui_draw_soldering_basic_status(false); }},
       {"a2_loeten_wuff", T, 318, 320, 300, 201, false, [] { dogSolderTimerStart = 1; dogBarkUntil = previewTicks + 1000; ui_draw_soldering_basic_status(false); }},
       {"a3_loeten_timer", T, 320, 320, 150, 201, false, [] { dogSolderTimerStart = previewTicks - 199000; ui_draw_soldering_basic_status(false); }},

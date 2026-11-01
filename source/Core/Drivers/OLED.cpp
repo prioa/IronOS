@@ -965,6 +965,16 @@ void OLED::fillArea(int16_t x, int8_t y, uint8_t wide, uint8_t height, const uin
   }
 }
 
+#ifdef TS101_DOG_UI
+void OLED::invertRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
+  for (uint8_t y = y0; y <= y1 && y < OLED_HEIGHT; y++) {
+    for (uint8_t x = x0; x <= x1 && x < OLED_WIDTH; x++) {
+      stripPointers[y / 8][x] ^= 1 << (y % 8);
+    }
+  }
+}
+#endif
+
 void OLED::drawFilledRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, bool clear) {
   // Ensure coordinates are within bounds
   if (x0 >= OLED_WIDTH || y0 >= OLED_HEIGHT || x1 >= OLED_WIDTH || y1 >= OLED_HEIGHT) {

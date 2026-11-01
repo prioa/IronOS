@@ -3,6 +3,7 @@
 #include "configuration.h"
 #ifdef TS101_DOG_UI
 #include "FreeRTOS.h"
+#include "ts101_dog_fonts.h"
 #include "ts101_dog_sprites.h"
 #include <stdint.h>
 
@@ -45,6 +46,40 @@ void dogSessionEnded();
 
 // Pose for the dog at temperature: barking, wagging after waking, panting while heating hard, an occasional wag otherwise
 DogPose dogSolderingPose(uint32_t x10Watt, int32_t x10Limit);
+
+// ---- Text with the bitmap fonts, base = the row just below the letters ----
+uint8_t dogTextWidth(const DogFont &font, const char *text);
+void    dogText(const DogFont &font, int16_t x, int16_t base, const char *text);
+// The small font, left aligned, centred between x0 and x1, right aligned at x1; the default base is the key row
+#define DOG_KEY_BASE 30
+void dogSmall(int16_t x, const char *text, int16_t base = DOG_KEY_BASE);
+void dogSmallCentre(int16_t x0, int16_t x1, const char *text, int16_t base = DOG_KEY_BASE);
+void dogSmallRight(int16_t x1, const char *text, int16_t base = DOG_KEY_BASE);
+char   *dogFormat(char *out, uint16_t value); // decimal digits, returns the end of the string
+// Large digits with the small degree ring, on rows 0-21
+uint8_t dogBigWidth(uint16_t value);
+void    dogBig(int16_t x, uint16_t value);
+void    dogBigRight(int16_t x1, uint16_t value);
+
+// ---- Key row (rows 23-31): each label stays next to its button, wherever the orientation puts it ----
+struct DogKey {
+  const uint8_t *icon;
+  const char    *text;
+};
+#define DOG_HOLD_START (TICKS_100MS * 3 / 2) // shorter presses only invert the field; the bar starts after this
+#define DOG_HOLD_FULL  (TICKS_100MS * 6)     // the bar is full and the action fires
+#define DOG_HOLD_STOP  (TICKS_SECOND)        // the same for switching the heater off
+
+void       dogButtonsPoll();                // once per frame, follows the buttons themselves (getButtonA/getButtonB)
+bool       dogPressed(bool front);          // down on its own, and not left over from the previous screen
+TickType_t dogHeldTicks(bool front);        // how long it has been down, 0 if not dogPressed
+void       dogPressConsumed();              // the press did its job: it counts for nothing more until released
+int16_t    dogFrontKeyX();                  // the column of the key icon on the front button's side
+void       dogDrawKeys(DogKey front, DogKey rear, const char *centre);       // words and icons, inverted while pressed
+void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon); // icons only, inverted while pressed
+// While held long enough, replaces the key row: text with a bar filling from the button's side. True if it drew
+bool       dogDrawHold(const char *text, bool front, TickType_t full);
+bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
 // Tip temperature history for the curve in the detailed soldering view
 void dogCurveReset();
