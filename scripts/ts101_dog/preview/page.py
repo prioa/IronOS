@@ -5,22 +5,20 @@ from PIL import Image, ImageChops
 
 rendered, boards, out = sys.argv[1:4]
 BOARDS = [
-    ('Detail, stop, temperature, sleep', [('g_detail', 'Detail view', 'Menu switch DETAILANSICHT'), ('g_stopp', 'Stop, rear held', ''), ('g_temp', 'Temperature on a preset', ''), ('g_schlaf', 'Sleep', '')]),
+    ('Detail, stop, temperature, sleep', [('g_detail', 'Detail view', 'Menu switch DETAILANSICHT'), ('g_stopp', 'Stop, rear held', ''), ('g_schlaf', 'Sleep', '')]),
     ('Menu', [('g_menu', 'Section Schlaf', ''), ('g_wert', 'Value being changed', '')]),
 ]
 OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter', 'Start, cooling'), ('h2_links20', 'Start, tilted left'), ('h4_spitze_unten', 'Start, tip down'), ('h5_geschuettelt_0', 'Start, shaken'),
          ('k1_heizt_65w', 'Heating at 65 W'), ('k3_heizt_fast_da', 'Heating, nearly there'), ('k4_heizt_gedreht', 'Heating, turned'), ('l1_bereit_350', 'Soldering, ready 350°'), ('l2_plus_370_heizt', 'After +: 370°, heating'),
-         ('l3_bereit_370', 'Ready 370°'), ('l4_minus_350_kuehlt', 'After −: cooling'), ('l5_platine_bleifrei_heizt', 'Longest name'), ('l10_gedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('r5_schlaf_gedreht', 'Sleep, turned'), ('r6_stopp_gedreht', 'Stop, turned'), ('r7_temp_gedreht', 'Temperature, turned'),
-         ('s4_druck', 'Front pressed'), ('s5_halten', 'Front held'), ('z2_schlaf_aus', 'Sleep, auto-off disabled'), ('t2_preset240', 'Solder 240°'), ('t3_preset320', 'Solder 320°'), ('t4_preset370', 'Solder 370°'), ('t5_preset400', 'Wires and mass 400°'), ('t1_temp_eigen', 'Own set point while soldering'), ('s6_temp', 'Temperature from Start'),
-         ('i1_strom', 'Info 1/5'), ('i4_statistik', 'Info 4/5, total time'), ('m1_menu_temp', 'Menu root'), ('m10_hilfe', 'Help text after 3 s'), ('m14_anzeige_schalter', 'Switches'), ('m9_halten', 'Rear held in the menu'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
-TABLE = [('Start', 'Solder', 'Menu', 'Temperature', '*Info'), ('Soldering', 'One solder hotter', '*One solder colder', '*Boost, 30 s at most', '*Stop after 0.5 s'), ('Temperature, from Start', '*+5°', '*−5°', 'Next preset', 'Done'),
+         ('l3_bereit_370', 'Ready 370°'), ('l4_minus_350_kuehlt', 'After −: cooling'), ('l5_platine_bleifrei_heizt', 'Longest name'), ('l10_gedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('r5_schlaf_gedreht', 'Sleep, turned'), ('r6_stopp_gedreht', 'Stop, turned'), 
+         ('s4_druck', 'Front pressed'), ('s5_halten', 'Front held'), ('z2_schlaf_aus', 'Sleep, auto-off disabled'),
+         ('i1_strom', 'Info 1/5'), ('i4_statistik', 'Info 4/5, total time'), ('m2_menu_info', 'Menu root'), ('m10_hilfe', 'Help text after 3 s'), ('m14_anzeige_schalter', 'Switches'), ('m9_halten', 'Rear held in the menu'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
+TABLE = [('Start', 'Solder', 'Menu', 'Nothing', '*Info'), ('Soldering', 'One solder hotter', '*One solder colder', '*Boost, 30 s at most', '*Stop after 0.5 s'),
          ('Menu list', '*Open or change', '*Next row', '*Nothing', 'Back'), ('Value', '+', '*−', 'Faster +', 'Done'), ('Info', 'Next page', '*Previous page', 'On System: debug', 'Back'), ('Sleep', 'Wake', 'Wake', 'Wake', '*Heater off, to Start')]
 CHOICES = ['Lock: hold both buttons on Start to switch it on or off. The SPERRE menu entry must not be off. To unlock: both buttons stop, then the same gesture on Start.',
            'A set point that is no preset shows Soll on Start. Presets read SnBi, Bleilot, Bleifrei, SnCu, Masse.',
-           'Above 400° the marker stops at the end of the scale; the set point can still go higher.',
-           'The Temperature view still closes after 2 s; the 4.5 s applies to the menu value.',
-           'Clicks change the solder at once while soldering, no view in between, nothing at the ends; ±5° remains on the Temperature view from Start. The SCHRITT menu entry is gone.',
-           'The dog runs only while heating up the first time and during boost; once the set point is reached it does not come back that session.']
+           'Clicks change the solder at once while soldering, no view in between, nothing at the ends. There is no Temperature view any more.',
+           'The dog runs only while heating up the first time and during boost; once the set point is reached it only comes back after sleep.']
 
 def load(path, invert):
     img = Image.open(path).convert('L')

@@ -68,8 +68,8 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
     if (!boostJustEnded()) {
       const uint16_t before = getSettingValue(SettingsOptions::SolderingTemp);
       dogJumpPreset(buttons == BUTTON_F_SHORT);
-      dogLotChangedAt = xTaskGetTickCount() | 1;
-      if (getSettingValue(SettingsOptions::SolderingTemp) != before) {
+      if (getSettingValue(SettingsOptions::SolderingTemp) != before) { // at the ends nothing happens, not even on the screen
+        dogLotChangedAt = xTaskGetTickCount() | 1;
         dogSettingsChanged(); // saved on the home screen: no flash write with the heater on, and it spares the flash
       }
     }
@@ -211,7 +211,11 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
       dogHeatupStartTempC = TipThermoModel::getTipInC();
       dogCurveReset();
       dogLotChangedAt = 0;
+      dogWokeHeating  = false;
       dogCountSession();
+    } else {
+      dogWokeHeating = true; // heating back up to the solder: the dog runs up a fresh curve
+      dogCurveReset();
     }
   }
   if (dogLockArmed && cxt->scratch_state.state1 < 2) {
@@ -249,6 +253,9 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
     if (!dogSolderTimerStart) {
       dogSolderTimerStart = xTaskGetTickCount() | 1; // never 0, that means "not started"
       dogReachedUntil     = xTaskGetTickCount() + TICKS_100MS * 2;
+    }
+    if (!cxt->scratch_state.state2) {
+      dogWokeHeating = false; // only the solder itself ends the dog's run, not reaching the boost target
     }
 #endif
     setStatusLED(LED_HOT);

@@ -30,7 +30,6 @@ static const char *name(OperatingMode m) {
   case OperatingMode::Sleeping: return "Schlaf";
   case OperatingMode::SettingsMenu: return "Menü";
   case OperatingMode::DebugMenuReadout: return "Info";
-  case OperatingMode::TemperatureAdjust: return "Temperatur";
   default: return "anderer";
   }
 }
@@ -49,7 +48,6 @@ static void step(bool front, bool rear, uint32_t ms = 30) {
     case OperatingMode::Sleeping: next = gui_SolderingSleepingMode(buttons, &cxt); break;
     case OperatingMode::SettingsMenu: next = gui_SettingsMenu(buttons, &cxt); break;
     case OperatingMode::DebugMenuReadout: next = showDebugMenu(buttons, &cxt); break;
-    case OperatingMode::TemperatureAdjust: next = gui_solderingTempAdjust(buttons, &cxt); break;
     default: break;
     }
     if (next != mode) {
@@ -135,11 +133,6 @@ int main() {
   step(true, true, 60);
   expectMode(OperatingMode::HomeScreen, "beide Tasten stoppen auch im Boost");
   idle(300);
-  startSoldering();
-  click(true);
-  step(true, true, 60);
-  expectMode(OperatingMode::HomeScreen, "beide Tasten stoppen auch bei offener Temperatur");
-  idle(300);
 
   puts("== Sperre am Start");
   setSettingValue(SettingsOptions::LockingMode, 0);
@@ -175,7 +168,8 @@ int main() {
   click(true);
   expect(setPoint() == 350, "320: Klick vorne sofort aufs nächste Lot, 350");
   expect(currentTempTargetDegC == 350, "Heizung folgt sofort, ohne Bestätigen");
-  expectMode(OperatingMode::Soldering, "keine Temperatur-Ansicht dazwischen");
+  expectMode(OperatingMode::Soldering, "bleibt im Löten");
+  expect(dogLotChangedAt != 0, "Temperatur und Legierung zeigen sich");
   click(true);
   expect(setPoint() == 370, "noch ein Klick: 370");
   click(false);
@@ -193,6 +187,10 @@ int main() {
   expect(setPoint() == 400, "vier Klicks vorne: 400");
   click(true);
   expect(setPoint() == 400, "oben bleibt es bei 400, kein Umspringen");
+  idle(2500);
+  dogLotChangedAt = 0;
+  click(true);
+  expect(dogLotChangedAt == 0, "am Ende passiert auch auf dem Screen nichts");
   setSettingValue(SettingsOptions::SolderingTemp, 335);
   click(true);
   expect(setPoint() == 350, "eigener Wert 335: Klick vorne auf das nächsthöhere Lot");
@@ -234,17 +232,12 @@ int main() {
   idle(2500);
   setSettingValue(SettingsOptions::SolderingTemp, 320);
 
-  puts("== Temperatur vom Start aus");
+  puts("== Keine Temperatur-Ansicht mehr");
   toHome();
-  hold(true, 800);
-  expectMode(OperatingMode::TemperatureAdjust, "Halten vorne am Start öffnet die Temperatur");
   const uint16_t atStart = setPoint();
-  click(true);
-  expect(setPoint() == atStart + 5, "am Start bleibt der Klick +5");
-  click(false);
-  expect(setPoint() == atStart, "und -5");
-  hold(false, 1000);
-  expectMode(OperatingMode::HomeScreen, "Halten hinten: fertig, zurück zum Start");
+  hold(true, 800);
+  expectMode(OperatingMode::HomeScreen, "Halten vorne am Start tut nichts");
+  expect(setPoint() == atStart, "und ändert nichts");
 
   puts("== Menü: hinten nächste Zeile, vorne öffnet, hinten halten zurück");
   click(false);
@@ -253,6 +246,9 @@ int main() {
   click(false);
   expect(!animated, "Klick hinten im Menü: nur die Markierung wandert, keine Animation");
   expectMode(OperatingMode::SettingsMenu, "und bleibt im Menü");
+  for (int i = 0; i < 5; i++) {
+    click(false); // einmal rundherum, wieder auf Info
+  }
   click(true);
   expectMode(OperatingMode::DebugMenuReadout, "Klick vorne auf Info öffnet die Info-Seiten");
 
@@ -272,14 +268,6 @@ int main() {
   hold(true, 800);
   expectMode(OperatingMode::SettingsMenu, "Halten vorne in der Liste tut nichts");
 
-  for (int i = 0; i < 6; i++) {
-    click(false); // Löten ... System, dann wieder Temperatur
-  }
-  click(true);
-  expectMode(OperatingMode::TemperatureAdjust, "Menü, Temperatur: Klick vorne öffnet die Temperatur");
-  hold(false, 1000);
-  expectMode(OperatingMode::SettingsMenu, "Halten hinten führt zurück ins Menü");
-  click(false);
   click(false);
   click(false);
   animated = false;
@@ -372,6 +360,28 @@ int main() {
   step(true, true, 60);
   expectMode(OperatingMode::HomeScreen, "beide Tasten im Schlaf: zum Start");
   idle(300);
+
+  puts("== Hund nach dem Schlaf und nach dem Boost");
+  setSettingValue(SettingsOptions::SolderingTemp, 320);
+  testSetTip(320);
+  startSoldering();
+  expect(dogSolderTimerStart != 0 && !dogWokeHeating, "am Ziel: Löt-Screen ohne Hund");
+  click(true);
+  testSetTip(330);
+  idle(100);
+  expect(dogSolderTimerStart != 0 && !dogWokeHeating, "Nachheizen nach dem Lotwechsel: kein Hund");
+  lastMovementTime = previewTicks - 70000;
+  lastButtonTime   = previewTicks - 70000;
+  idle(300);
+  expectMode(OperatingMode::Sleeping, "schläft");
+  testSetTip(150);
+  moved();
+  idle(300);
+  expectMode(OperatingMode::Soldering, "Bewegung weckt");
+  expect(dogWokeHeating, "nach dem Schlaf läuft der Hund beim Heizen");
+  step(true, true, 60);
+  idle(300);
+  testSetTip(320);
 
   puts("== Griff zu heiß");
   startSoldering();

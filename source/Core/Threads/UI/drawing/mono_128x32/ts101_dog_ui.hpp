@@ -15,6 +15,7 @@ extern TickType_t dogReachedUntil;     // the screen stays inverted until this t
 extern TickType_t dogSleepEnterTime;   // when sleep started, for the lie down animation
 extern uint32_t   dogLastSessionSeconds; // length of the last soldering session, for the home screen
 extern TickType_t dogLotChangedAt;     // a click changed the solder: its temperature and alloy show for 2 s
+extern bool       dogWokeHeating;      // back from sleep and not at the set point yet: the dog runs again
 
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor); // major:mm
 
@@ -87,13 +88,9 @@ const char *dogTipName(); // the tip type picked in the menu, in the small font
 #define DOG_INFO_PAGES 5
 void dogDrawInfoPage(uint8_t page);
 
-// ---- Temperature view: changes the set point; while soldering it lives inside the soldering mode, so the heater and every safety check keep running ----
-void dogAdjustOpened();                         // restarts the view for a fresh press
-bool dogAdjustButtons(ButtonState buttons); // applies the buttons; true when the view should close
-void dogJumpPreset(bool up);                // the next preset in that direction, nothing at the ends
-int8_t dogPresetIndex();                        // which preset the set point is on, -1 for none
-void dogDrawTemperatureView(bool heating);      // set point, scale, and the curve or the preset's use
-#define DOG_ADJUST_TIMEOUT (TICKS_SECOND * 2)
+// ---- The solders: a click while soldering moves one up or down, nothing at the ends ----
+void   dogJumpPreset(bool up);
+int8_t dogPresetIndex(); // which solder the set point is on, -1 for none
 #define DOG_BOOST_CLICK_GUARD (TICKS_100MS * 8) // clicks this soon after a boost are ignored (upstream issue #1663)
 
 // Texts of the new screens: German in the DE build, English everywhere else (the fonts only have Latin letters)

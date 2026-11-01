@@ -19,19 +19,6 @@ int8_t dogPresetIndex() {
   return -1;
 }
 
-// The first preset above the current set point, wrapping round to the lowest: one step, whatever it is now
-static void selectNextPreset() {
-  const uint16_t current = getSettingValue(SettingsOptions::SolderingTemp);
-  uint16_t       next    = presets()[0];
-  for (uint8_t i = 0; i < PRESET_COUNT; i++) {
-    if (presets()[i] > current) {
-      next = presets()[i];
-      break;
-    }
-  }
-  setSettingValue(SettingsOptions::SolderingTemp, next);
-}
-
 // A click while soldering: the next solder preset in that direction, staying at the ends so a click can't jump from one end to the other
 void dogJumpPreset(bool up) {
   const uint16_t current = getSettingValue(SettingsOptions::SolderingTemp);
@@ -44,53 +31,6 @@ void dogJumpPreset(bool up) {
   }
 }
 
-static void stepSetPoint(bool up) {
-  const bool    inF  = getSettingValue(SettingsOptions::TemperatureInF);
-  const int16_t step = 5; // a hold jumps a preset, so this is the only step
-  const int16_t now  = getSettingValue(SettingsOptions::SolderingTemp);
-  // To the next multiple of the step in that direction
-  int16_t next = up ? (now / step + 1) * step : ((now - 1) / step) * step;
-  const int16_t lo = inF ? MIN_TEMP_F : MIN_TEMP_C, hi = inF ? MAX_TEMP_F : MAX_TEMP_C;
-  next = next < lo ? lo : (next > hi ? hi : next);
-  setSettingValue(SettingsOptions::SolderingTemp, (uint16_t)next);
-}
-
-void dogAdjustOpened() { lastButtonTime = xTaskGetTickCount(); }
-
-bool dogAdjustButtons(ButtonState buttons) {
-  if (dogHoldDone(false, DOG_HOLD_FULL)) {
-    dogPressConsumed();
-    return true;
-  }
-  if (dogHoldDone(true, DOG_HOLD_FULL)) {
-    dogPressConsumed(); // exactly one preset per hold, however long it lasts
-    selectNextPreset();
-    return false;
-  }
-  switch (buttons) {
-  case BUTTON_F_SHORT:
-  case BUTTON_B_SHORT:
-    stepSetPoint(buttons == BUTTON_F_SHORT);
-    break;
-  case BUTTON_BOTH:
-    return true;
-  default:
-    break;
-  }
-  return (xTaskGetTickCount() - lastButtonTime) > DOG_ADJUST_TIMEOUT;
-}
-
-// Only used from the home screen and the menu, with the heater off; while soldering the view lives in Soldering.cpp
-OperatingMode gui_solderingTempAdjust(const ButtonState buttons, guiContext *cxt) {
-  currentTempTargetDegC = 0;
-  dogDrawTemperatureView(false);
-  if (dogAdjustButtons(buttons)) {
-    saveSettings();
-    cxt->transitionMode = TransitionAnimation::Right;
-    return cxt->previousMode;
-  }
-  return OperatingMode::TemperatureAdjust;
-}
 #else
 OperatingMode gui_solderingTempAdjust(const ButtonState buttonIn, guiContext *cxt) {
 

@@ -27,11 +27,6 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
     lockNoticeUntil = xTaskGetTickCount() + TICKS_SECOND * 3 / 2;
     return OperatingMode::HomeScreen;
   }
-  if (dogHoldDone(true, DOG_HOLD_FULL)) {
-    dogPressConsumed();
-    cxt->transitionMode = TransitionAnimation::Left;
-    return OperatingMode::TemperatureAdjust;
-  }
   if (dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Left;

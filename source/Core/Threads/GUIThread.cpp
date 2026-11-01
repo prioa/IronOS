@@ -124,9 +124,11 @@ OperatingMode guiHandleDraw(void) {
   case OperatingMode::Sleeping:
     newMode = gui_SolderingSleepingMode(buttons, &context);
     break;
+#ifndef TS101_DOG_UI // the set point is changed by solder clicks and in the menu
   case OperatingMode::TemperatureAdjust:
     newMode = gui_solderingTempAdjust(buttons, &context);
     break;
+#endif
   case OperatingMode::DebugMenuReadout:
     newMode = showDebugMenu(buttons, &context);
     break;

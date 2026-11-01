@@ -68,7 +68,6 @@ struct DogMenuSection {
 };
 #define ITEMS(list) list, sizeof(list) / sizeof(list[0])
 static const DogMenuSection sections[] = {
-    {"TEMPERATUR", "TEMPERATURE", nullptr, 0}, // opens the temperature view
     {"INFO", "INFO", nullptr, 0},              // opens the info pages
     {"LÖTEN", "SOLDER", ITEMS(solderItems)},
     {"SCHLAF", "SLEEP", ITEMS(sleepItems)},
@@ -327,14 +326,7 @@ static void drawRow(uint8_t section, uint8_t index, uint8_t row, bool selected, 
   const int16_t base = y0 + 7;
   if (section == NO_SECTION) {
     dogSmall(2, T(sections[index].de, sections[index].en), base);
-    if (index == 0) {
-      char  text[8];
-      char *end = dogFormat(text, getSettingValue(SettingsOptions::SolderingTemp));
-      strcpy(end, "°");
-      dogSmallRight(VALUE_RIGHT, text, base);
-    } else {
-      dogBlit(VALUE_RIGHT - 7, y0, 8, 8, iconNext);
-    }
+    dogBlit(VALUE_RIGHT - 7, y0, 8, 8, iconNext);
   } else {
     const DogMenuItem &item = sections[section].items[index];
     dogSmall(2, T(item.de, item.en), base);
@@ -466,7 +458,7 @@ void dogDrawMenuValue(uint8_t section, uint8_t pos) {
 const char *dogMenuRowOverflow() {
   static const uint16_t samples[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 50, 99, 100, 120, 180, 300, 450, 850};
   for (uint8_t lang = 0; lang < 2; lang++) {
-    for (uint8_t sct = 2; sct < SECTION_COUNT; sct++) {
+    for (uint8_t sct = 1; sct < SECTION_COUNT; sct++) {
       for (uint8_t i = 0; i < sections[sct].count; i++) {
         const DogMenuItem &item  = sections[sct].items[i];
         const char        *label = lang ? item.en : item.de;
@@ -586,10 +578,6 @@ OperatingMode gui_SettingsMenu(const ButtonState buttonsIn, guiContext *cxt) {
   } else if (buttons == BUTTON_F_SHORT) {
     if (openSection == NO_SECTION) {
       if (position == 0) {
-        cxt->transitionMode = TransitionAnimation::Left;
-        return OperatingMode::TemperatureAdjust;
-      }
-      if (position == 1) {
         cxt->transitionMode = TransitionAnimation::Left;
         return OperatingMode::DebugMenuReadout;
       }

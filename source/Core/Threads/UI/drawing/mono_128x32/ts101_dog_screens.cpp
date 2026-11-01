@@ -6,7 +6,6 @@
 #ifdef TS101_DOG_UI
 #include "OperatingModes.h"
 #include "SolderingCommon.h"
-#include "TipThermoModel.h"
 #include "power.hpp"
 #include "ui_drawing.hpp"
 #include "../../../../../version.h"
@@ -52,21 +51,6 @@ static void drawBig(uint16_t value) {
     dogBigRight(BIG_RIGHT, value);
   } else {
     dogBig(-1, value); // the digits have an empty first column
-  }
-}
-
-// "-" on the rear button's side and "+" on the front button's, on the row of the power bar
-static void drawMinusPlus() {
-  const bool    frontRight = dogFrontOnRight();
-  const int16_t minusX = frontRight ? 0 : OLED_WIDTH - 5, plusX = frontRight ? OLED_WIDTH - 5 : 0;
-  OLED::drawFilledRect(minusX, 27, minusX + 4, 27, false);
-  OLED::drawFilledRect(plusX, 27, plusX + 4, 27, false);
-  OLED::drawFilledRect(plusX + 2, 25, plusX + 2, 29, false);
-  if (dogPressed(true)) {
-    OLED::invertRect(frontRight ? OLED_WIDTH - 6 : 0, 23, frontRight ? OLED_WIDTH - 1 : 5, 31);
-  }
-  if (dogPressed(false)) {
-    OLED::invertRect(frontRight ? 0 : OLED_WIDTH - 6, 23, frontRight ? 5 : OLED_WIDTH - 1, 31);
   }
 }
 
@@ -266,9 +250,10 @@ static void drawSolderingScreen() {
     }
     dogSmall(x0, text, 19);
     int16_t dots = x0 + dogTextWidth(dogFontSmall, text) + 2;
-    dots         = dots < x0 + 54 ? x0 + 54 : dots;
+    const uint8_t pitch = dots > x0 + 54 ? 4 : 5; // SAC305 is too wide for x=54: closer together, to stay clear of ZIEL
+    dots                = dots < x0 + 54 ? x0 + 54 : dots;
     for (uint8_t i = 0; i < SOLDER_COUNT; i++) {
-      const int16_t x = dots + i * 5;
+      const int16_t x = dots + i * pitch;
       if (i == solder) {
         OLED::drawFilledRect(x, 14, x + 2, 16, false);
       } else {
@@ -299,7 +284,7 @@ void ui_draw_soldering_basic_status(bool boostModeOn) {
   }
   if (boostModeOn) {
     drawBoostScreen();
-  } else if (!dogSolderTimerStart) {
+  } else if (!dogSolderTimerStart || dogWokeHeating) {
     drawHeatingScreen();
   } else {
     drawSolderingScreen();
@@ -345,58 +330,6 @@ void ui_draw_soldering_power_status(bool boostModeOn) {
   dogFormatTime(text, minutes < 100 ? minutes : minutes / 60, minutes < 100 ? seconds % 60 : minutes % 60);
   dogSmallRight(x1, text, 31);
   drawBig(getTipTemp());
-}
-
-/*
- * Temperature view, the same while soldering and on the home screen; the scale runs from 100 to 400 °C
- *   Soll 350°  BLEIFREI
- *              SAC305
- *   -  ----|----|----|--v-|  +
- */
-static const char *presetUse(uint8_t line) {
-  static const char *const de[][2] = {{"NT-LOT", "SN42BI58"}, {"BLEILOT", "SN63PB37"}, {"BLEIFREI", "SAC305"}, {"BLEIFREI", "SNCU0.7"}, {"KABEL +", "MASSE"}};
-  static const char *const en[][2] = {{"LOW TEMP", "SN42BI58"}, {"LEADED", "SN63PB37"}, {"UNLEADED", "SAC305"}, {"UNLEADED", "SNCU0.7"}, {"WIRES +", "MASS"}};
-  const int8_t             preset  = dogPresetIndex();
-  return preset < 0 ? nullptr : (dogLangDE() ? de : en)[preset][line];
-}
-
-void dogDrawTemperatureView(bool) {
-  const bool     inF  = getSettingValue(SettingsOptions::TemperatureInF);
-  const uint16_t set  = getSettingValue(SettingsOptions::SolderingTemp);
-  const uint16_t setC = inF ? TipThermoModel::convertFtoC(set) : set;
-  dogSmall(0, DOG_T("Soll", "Set"), 10);
-  dogBig(25, set);
-  const int16_t xMin = 80, xMax = OLED_WIDTH - 1;
-  const char   *use0 = presetUse(0);
-  if (use0) {
-    dogSmall(xMin, use0, 9);
-    dogSmall(xMin, presetUse(1), 18);
-  } else {
-    char text[12];
-    strcpy(text, DOG_T("IST ", "TIP "));
-    formatUnit(text + strlen(text), getTipTemp(), "°");
-    dogSmallRight(xMax, text, 15);
-  }
-  if (dogDrawHold(DOG_T("HALTEN: PRESET", "HOLD: PRESET"), true, DOG_HOLD_FULL) || dogDrawHold(DOG_T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL)) {
-    return;
-  }
-  drawMinusPlus();
-  // Low on the rear button's side, like the minus
-  const bool frontRight = dogFrontOnRight();
-  auto       scaleX     = [&](int32_t c) -> int16_t {
-    c                 = c < 100 ? 100 : (c > 400 ? 400 : c);
-    const int16_t x   = 8 + (c - 100) * 111 / 300;
-    return frontRight ? x : OLED_WIDTH - 1 - x;
-  };
-  OLED::drawFilledRect(frontRight ? 8 : OLED_WIDTH - 120, 27, frontRight ? 119 : OLED_WIDTH - 9, 27, false);
-  for (uint16_t t = 100; t <= 400; t += 100) {
-    OLED::drawFilledRect(scaleX(t), 25, scaleX(t), 29, false);
-  }
-  const int16_t c = scaleX(setC);
-  OLED::drawFilledRect(c, 24, c, 29, false);
-  OLED::drawFilledRect(c - 1, 23, c + 1, 23, false);
-  OLED::drawFilledRect(c - 2, 22, c + 2, 22, false);
-  OLED::drawFilledRect(c - 3, 21, c + 3, 21, false);
 }
 
 /*

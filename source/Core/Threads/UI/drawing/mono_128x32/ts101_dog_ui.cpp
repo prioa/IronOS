@@ -7,6 +7,7 @@ TickType_t dogSolderTimerStart = 0;
 uint16_t   dogHeatupStartTempC = 0;
 TickType_t dogReachedUntil     = 0;
 TickType_t dogLotChangedAt     = 0;
+bool       dogWokeHeating      = false;
 TickType_t dogSleepEnterTime   = 0;
 uint32_t   dogLastSessionSeconds = 0;
 
