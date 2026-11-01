@@ -46,20 +46,14 @@ def pair(left, front_right):
 def area(pixels, x0, x1, y0=0, y1=31):
     return {(x, y) for x, y in pixels if x0 <= x <= x1 and y0 <= y <= y1}
 
-def rdiv(a, b):
-    return int((a + (-(b // 2) if a < 0 else b // 2)) / b)
-
-def dog_at(origin, s3=0, head_x=None, down=0):
-    """The firmware's transform: shear about row 18, s in thirds of a pixel, head rows 0-13 moved on their own"""
-    hx = rdiv(2 * s3, 15) if head_x is None else head_x
-    hx += rdiv(3 * down, 3)
-    hy = rdiv(2 * down, 3)
+def dog_at(origin, rise=0, head=1, lids=False):
+    """The firmware's poses: the bitmap as it is, the head rows 0-13 moved as one block, the eye gaps closed on rows 7 and 9"""
+    pixels = set(dog) | ({(x, y) for x in (6, 9) for y in (7, 9)} if lids else set())
     out = set()
-    for x, y in dog:
-        head = y < 14
-        nx, ny = origin + x + rdiv(s3 * (18 - y), 54) + (hx if head else 0), y + (hy if head else 0)
-        if 0 <= nx < 128 and 0 <= ny < 32:
-            out.add((nx, ny))
+    for x, y in pixels:
+        ny = y - rise + (head if y < 14 else 0)
+        if 0 <= ny < 32:
+            out.add((origin + x, ny))
     return out
 
 normal, turned = load('h1_ruhig'), load('h6_umgedreht')
@@ -67,26 +61,18 @@ check(area(normal, 96, 127, 17, 31) == pair(96, True), 'normal: two 15x15 boxes 
 check(area(turned, 0, 31, 17, 31) == pair(0, False), 'turned: the boxes on the left, play in the left box next to the front button')
 inside = {(x, y) for x in range(97, 110) for y in range(18, 31)}
 check(area(load('h10_hinten_gedrueckt'), 97, 109, 18, 30) == inside - moved(sliders, 98, 21), 'rear pressed: the inside of its box inverted')
-check(area(normal, 0, 33) == dog_at(2), 'normal: at rest the dog is the bitmap, 2 px further right (x=2)')
-check(area(turned, 94, 127) == dog_at(98), 'turned: at rest the dog is the bitmap at x=98, not mirrored')
-
-check(area(load('h2_links20'), 0, 35) == area(dog_at(2, 15), 0, 35), 'tilted left 20: s=+5 (against the tilt), head +2')
-check(area(load('h3_rechts20'), 0, 35) == area(dog_at(2, -15), 0, 35), 'tilted right 20: s=-5, head -2')
-check(area(load('h2_links20_bild1'), 0, 35) == area(dog_at(2, 5), 0, 35), 'tilt fades in: frame 1 is s=5/3')
-check(area(load('h2_links20_bild2'), 0, 35) == area(dog_at(2, 10), 0, 35), 'tilt fades in: frame 2 is s=10/3')
-check(area(load('h4_spitze_unten'), 0, 35) == area(dog_at(2, 0, None, 3), 0, 35), 'tip down: head 3 px right, 2 px down, no lean')
-# Tip down from level: the lean the filter passes through on the way, then the head goes down one step a frame
-levels = []
-for i in range(1, 9):
-    img = area(load(f'h4_spitze_unten_bild{i}'), 0, 35)
-    match = [(s3, d) for s3 in range(-15, 16, 5) for d in range(4) if img == area(dog_at(2, s3, None, d), 0, 35)]
-    levels.append(match[0] if match else None)
-check(None not in levels, 'tip down: every frame is the dog with a lean in thirds and a head level ' + str(levels))
-downs = [d for _, d in levels if levels and _ is not None] if None not in levels else []
-check(bool(downs) and downs[-1] == 3 and all(b - a in (0, 1) for a, b in zip(downs, downs[1:])) and 1 in downs and 2 in downs,
-      'tip down: the head goes down over 3 frames, one step each, and stays')
-for frame, (s, v) in enumerate(zip((3, -3, 3, -3, 3, -3, 2, -2), (2, -2, 2, -2, 2, -2, 1, -1))):
-    check(area(load(f'h5_geschuettelt_{frame}'), 0, 35) == area(dog_at(2, 3 * s, v), 0, 35), f'shaken frame {frame}: s={s}, head {v:+d}')
+check(area(normal, 0, 33) == dog_at(2), 'normal: at rest the bitmap at x=2, the head a pixel lower')
+check(area(turned, 94, 127) == dog_at(98), 'turned: the same at x=98, not mirrored')
+check(area(load('h2_blinzelt'), 0, 35) == dog_at(2, lids=True), 'blinking: the eye gaps closed, nothing else moves')
+check(area(load('h3_aufmerksam'), 0, 35) == dog_at(2, head=0), 'moved: the head up in the bitmap, ears raised')
+check(area(load('h3_aufmerksam_gedreht'), 94, 127) == dog_at(98, head=0), 'moved, turned: the same')
+rest, up = area(normal, 0, 33), area(load('h3_aufmerksam'), 0, 33)
+check(all(y <= 14 for x, y in rest ^ up), 'rest and moved differ only in the head')
+for frame, rise in ((1, 1), (2, 2), (3, 1)):
+    check(area(load(f'h4_hopser_{frame}'), 0, 35) == dog_at(2, rise=rise, head=rise), f'hop frame {frame}: {rise} px off the ground, nothing cut at the top')
+check(area(load('h4_hopser_4'), 0, 35) == dog_at(2, head=0), 'hop over: on the ground, still alert')
+for name in ('h1_ruhig', 'h2_blinzelt', 'h3_aufmerksam', 'h4_hopser_2'):
+    check(not area(load(name), 34, 36), f'{name}: nothing of the dog reaches the statistics')
 
 for name, x0, limit in [(n, 37, 93) for n in ('h8_gesamt_max', 'h8_aktuell_38', 'h8_aktuell_999', 'h8_aktuell_max', 'h8_vorgaenge_9999', 'h8_vorgaenge_max', 'h8_boosts_max')] + [('h8_umgedreht_vorgaenge_9999', 36, 92)]:
     img = load(name)

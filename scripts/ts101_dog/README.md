@@ -11,10 +11,9 @@ Values apply at once, there is nothing to confirm. Both buttons together stop at
 |---|---|---|---|---|
 | Start | solder | menu | nothing | nothing |
 | Soldering | one solder hotter | one solder colder | boost, 30 s at most | stop after 0.5 s |
-| Menu, section | open | next entry | nothing | a level up, or to Start |
-| Menu, switch or choice of up to 5 | next value, blinks once | next entry | nothing | a level up, or to Start |
-| Menu, number | change it | next entry | nothing | a level up, or to Start |
-| Changing a number | + | - | + faster | back to the entry (also 2 s without a button) |
+| Menu, switch or choice | next value, blinks once | next row | row up, repeating | to Start |
+| Menu, number | change it | next row | row up, repeating | to Start |
+| Changing a number | + | - | + faster | back to the row (also 2 s without a button) |
 | Sleep | wake | wake | wake | heater off, to Start |
 
 The screens follow the "TS101 Gegenentwürfe" boards on a 128x32 grid; `preview/extract_gegenentwuerfe.py` unpacks those boards
@@ -28,9 +27,9 @@ into reference images for `preview/compare.py`.
   trend arrow (from 0.3 C/s, off below 0.15 C/s), the curve of the last 10 minutes and the button pair next to the buttons. Held
   the other way round the blocks swap sides and the front button's box moves to the left; nothing is mirrored. The number blinks
   while hot if `COOLING TEMP BLINK` is on. The history is fed on every GUI frame, so the curve goes on through soldering.
-- **Dog**: follows the tilt of the iron's long axis, 8 updates a second: the head (rows 0-11) turns by half the tilt, at most 12
-  degrees, and moves a pixel from 6 degrees; from 45 degrees towards the tip it also drops a pixel. Shaken, the whole dog hops.
-  The sensor axis is `DOG_ACCEL_ALONG` / `DOG_ACCEL_ALONG_SIGN` at the top of `ts101_dog_home.cpp`, **not yet checked on the iron**.
+- **Dog**: never deformed. It sits with its head relaxed and blinks at uneven intervals, looks up with its ears raised for at least 1.5 s when
+  the iron is moved, and hops when it is shaken. Only how strongly the sensor reading changes counts, so no axis has to be known. The two
+  thresholds are `DOG_MOVED_SIXTEENTHS` and `DOG_SHAKE_X10` at the top of `ts101_dog_home.cpp`, **not yet checked on the iron**.
 - **Statistics**: `GESAMT` (lifetime hours with the heater on in soldering mode), `AKTUELL` (soldering minutes since power on, not
   saved), `VORGÄNGE`, `BOOSTS`. Counters are saved on the Start screen only: no flash write with the heater on. Disconnecting
   power while soldering loses what was counted since the last time on Start.
@@ -48,11 +47,9 @@ into reference images for `preview/compare.py`.
 - **Presets** (`TS101_PRESETS_C`): 240 Sn42Bi58, 320 Sn63Pb37 and Sn60Pb40, 350 SAC305, 370 Sn99.3Cu0.7, 400 wires and large copper
   areas. Starting values for the tip, not datasheet figures: alloys that want the same tip temperature share one step.
 - **Solders**: clicks right after a boost are ignored (upstream #1663). Changes made while soldering are saved on the home screen.
-- **Menu** (`SettingsMenuDog.cpp`): one entry per screen: section and position dots on top, the name below, the value top right (a triangle
-  on sections and actions), the next entry at the bottom, or a number's range while it changes. Top level: Eigenes Ziel, Löten, Schlaf,
-  Anzeige, Sperre, Info, Zurücksetzen. Resetting and calibrating keep their own screens from the stock menu.
-- **Info**: a section of the menu with five pages (power, tip, handle and side, statistics, system): the page's name small on top, because
-  its two rows of label and value take the room of the large name. System opens the raw debug values.
+- **Menu** (`SettingsMenuDog.cpp`): one list, four rows at a time with a scroll bar: 25 settings in the order of how often they change, then
+  the readings of the info pages; the last one opens the raw debug values. A number's range takes the last row while it changes. Resetting
+  and calibrating keep their own screens from the stock menu.
 - **Sleep**: the dog with closed eyes and three z rising, `SCHLAF`, `AUS IN n MIN` (empty if auto-off is disabled), the temperature as while
   soldering, `BEWEGEN WECKT`. The content moves 0, -1, -2, -1 px every 4 s against burning in. Waking shows three frames of the dog looking up,
   then heating with the running dog. Only letting go of the rear button wakes the iron, so a hold can finish as a stop even if it moves meanwhile.

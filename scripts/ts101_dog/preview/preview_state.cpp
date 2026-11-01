@@ -206,33 +206,57 @@ static void setAccel(int16_t x, int16_t y, int16_t z) {
   dogAccelRaw[2] = z;
 }
 
-// Leaves the filter settled on this reading, at the scene's time. The iron's angle in degrees: positive = tip end down; gravity 1 g = 8000
-static void holdAtAngle(int degrees) {
-  const double a = degrees * 3.14159265 / 180;
+// The iron has lain still for a moment: the dog at rest, before its first blink. gravity 1 g = 8000
+static void calm() {
   const uint32_t end = previewTicks;
   dogHomeMotionReset();
-  setAccel((int16_t)(8000 * sin(a)), (int16_t)(-8000 * cos(a)), 0);
-  for (int i = 48; i >= 0; i--) {
+  setAccel(0, -8000, 0);
+  for (int i = 8; i >= 0; i--) {
     previewTicks = end - i * 125;
     dogHomeMotionUpdate();
   }
 }
 
-// Calm, then shaken for the given number of frames
-static void shaken(int frames) {
+// Still long enough for the first blink to be under way
+static void aboutToBlink() {
   const uint32_t end = previewTicks;
-  previewTicks       = end - frames * 125;
-  holdAtAngle(0);
+  previewTicks       = end - 3100;
+  dogHomeMotionReset();
+  setAccel(0, -8000, 0);
+  for (int i = 0; previewTicks < end; i++) {
+    dogHomeMotionUpdate();
+    previewTicks += 125;
+  }
+  previewTicks = end;
+  dogHomeMotionUpdate();
+}
+
+// Calm, then picked up: a clear change of the reading, far from a shake
+static void pickedUp() {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - 125;
+  calm();
+  previewTicks = end;
+  setAccel(2800, -7500, 0);
+  dogHomeMotionUpdate();
+}
+
+// Calm, then one strong reading; frame 1-4 of the hop
+static void shaken(int frame) {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - frame * 125;
+  calm();
   setAccel(0, -16000, 0);
-  for (int i = frames - 1; i >= 0; i--) {
+  for (int i = frame - 1; i >= 0; i--) {
     previewTicks = end - i * 125;
     dogHomeMotionUpdate();
+    setAccel(0, -8000, 0);
   }
 }
 
-static void home(int degrees) {
+static void home() {
   feedHistory(HomeCurve::Cold, tipC);
-  holdAtAngle(degrees);
+  calm();
   ui_draw_homescreen_simplified(tipC);
 }
 
@@ -241,27 +265,10 @@ static void homeStatistics(uint16_t minutesTotal, uint16_t counts, uint16_t sess
   settings[SettingsOptions::TotalSolderSessions] = settings[SettingsOptions::TotalBoosts] = counts;
   dogSessionMinutes = session;
   feedHistory(HomeCurve::Heating, 350); // the widest temperature and the arrow: the tightest the top row gets
-  holdAtAngle(0);
+  calm();
   ui_draw_homescreen_simplified(350);
 }
 
-
-// The tilt held for this many frames after level: the fade in
-static void tilted(int degrees, int frames) {
-  feedHistory(HomeCurve::Cold, tipC);
-  const uint32_t end = previewTicks;
-  previewTicks       = end - frames * 125;
-  holdAtAngle(0);
-  const double a = degrees * 3.14159265 / 180;
-  setAccel((int16_t)(8000 * sin(a)), (int16_t)(-8000 * cos(a)), 0);
-  for (int i = frames - 1; i >= 0; i--) {
-    previewTicks = end - i * 125;
-    for (int k = 0; k < 3; k++) {
-      dogHomeMotionUpdate(); // a raw filter: let it settle within the frame, as a held angle does after a few frames
-    }
-  }
-  ui_draw_homescreen_simplified(tipC);
-}
 
 // Heating from 25 C at 4 samples a second up to this temperature; frame picks the legs' phase
 static void heatingScene(uint16_t now, int32_t x10W, int frame) {
@@ -315,33 +322,16 @@ std::vector<PreviewScene> previewScenes() {
   return {
       // The home screen: H0 is on the statistics' first phase, each phase lasts 2 s
 #define H0 6000000
-      {"h1_ruhig", H0, 26, 350, 0, 201, false, [] { home(0); }},
-      {"h2_links20", H0, 26, 350, 0, 201, false, [] { home(-20); }},
-      {"h3_rechts20", H0, 26, 350, 0, 201, false, [] { home(20); }},
-      {"h4_spitze_unten", H0, 26, 350, 0, 201, false, [] { home(60); }},
-      {"h5_geschuettelt_0", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(1); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(2); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(3); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(4); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(5); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_5", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(6); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_6", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(7); ui_draw_homescreen_simplified(26); }},
-      {"h5_geschuettelt_7", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(8); ui_draw_homescreen_simplified(26); }},
-      {"h2_links20_bild1", H0, 26, 350, 0, 201, false, [] { tilted(-20, 1); }},
-      {"h2_links20_bild2", H0, 26, 350, 0, 201, false, [] { tilted(-20, 2); }},
-      {"h4_spitze_unten_bild1", H0, 26, 350, 0, 201, false, [] { tilted(60, 1); }},
-      {"h4_spitze_unten_bild2", H0, 26, 350, 0, 201, false, [] { tilted(60, 2); }},
-      {"h4_spitze_unten_bild3", H0, 26, 350, 0, 201, false, [] { tilted(60, 3); }},
-      {"h4_spitze_unten_bild4", H0, 26, 350, 0, 201, false, [] { tilted(60, 4); }},
-      {"h4_spitze_unten_bild5", H0, 26, 350, 0, 201, false, [] { tilted(60, 5); }},
-      {"h4_spitze_unten_bild6", H0, 26, 350, 0, 201, false, [] { tilted(60, 6); }},
-      {"h4_spitze_unten_bild7", H0, 26, 350, 0, 201, false, [] { tilted(60, 7); }},
-      {"h4_spitze_unten_bild8", H0, 26, 350, 0, 201, false, [] { tilted(60, 8); }},
-      {"h3_rechts8", H0, 26, 350, 0, 201, false, [] { home(8); }},
-      {"h6_umgedreht_links20", H0, 26, 350, 0, 201, false, [] { orient(false); home(-20); }},
-      {"h6_umgedreht_rechts20", H0, 26, 350, 0, 201, false, [] { orient(false); home(20); }},
-      {"h10_hinten_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(0); pressed(false, 100); ui_draw_homescreen_simplified(26); }},
-      {"h10_vorne_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(0); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
+      {"h1_ruhig", H0, 26, 350, 0, 201, false, [] { home(); }},
+      {"h2_blinzelt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); aboutToBlink(); ui_draw_homescreen_simplified(26); }},
+      {"h3_aufmerksam", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); pickedUp(); ui_draw_homescreen_simplified(26); }},
+      {"h3_aufmerksam_gedreht", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); pickedUp(); ui_draw_homescreen_simplified(26); }},
+      {"h4_hopser_1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(1); ui_draw_homescreen_simplified(26); }},
+      {"h4_hopser_2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(2); ui_draw_homescreen_simplified(26); }},
+      {"h4_hopser_3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(3); ui_draw_homescreen_simplified(26); }},
+      {"h4_hopser_4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(4); ui_draw_homescreen_simplified(26); }},
+      {"h10_hinten_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(false, 100); ui_draw_homescreen_simplified(26); }},
+      {"h10_vorne_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
       // Heating up, the first time to the set point: the dog runs up the curve, its legs as fast as the power allows
       {"k1_heizt_65w", T, 120, 350, 650, 201, false, [] { heatingScene(120, 650, 0); }},
       {"k1_heizt_65w_bild1", T + 50, 120, 350, 650, 201, false, [] { heatingScene(120, 650, 1); }},
@@ -369,8 +359,7 @@ std::vector<PreviewScene> previewScenes() {
       {"b1_boost_bild2", 209050, 400, 350, 650, 201, false, [] { boostScene(23); }},
       {"b1_boost_bild3", 209075, 400, 350, 650, 201, false, [] { boostScene(23); }},
       {"b2_boost_gedreht", 209000, 400, 350, 650, 201, false, [] { orient(false); boostScene(23); }},
-      {"h6_umgedreht", H0, 26, 350, 0, 201, false, [] { orient(false); home(0); }},
-      {"h7_umgedreht_spitze_tiefer20", H0, 26, 350, 0, 201, false, [] { orient(false); home(20); }},
+      {"h6_umgedreht", H0, 26, 350, 0, 201, false, [] { orient(false); home(); }},
       {"h8_gesamt_max", H0, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
       {"h8_aktuell_38", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 38); }},
       {"h8_aktuell_999", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
@@ -379,15 +368,15 @@ std::vector<PreviewScene> previewScenes() {
       {"h8_vorgaenge_max", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
       {"h8_boosts_max", H0 + 6000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
       {"h8_umgedreht_vorgaenge_9999", H0 + 4000, 350, 350, 0, 201, false, [] { orient(false); homeStatistics(65534, 9999, 999); }},
-      {"h9_runter", H0, 180, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cooling, 180); holdAtAngle(0); ui_draw_homescreen_simplified(180); }},
-      {"h9_runter_wippt", H0 + 500, 180, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cooling, 180); holdAtAngle(0); ui_draw_homescreen_simplified(180); }},
-      {"h9_hoch", H0, 200, 350, 0, 201, false, [] { feedHistory(HomeCurve::Heating, 200); holdAtAngle(0); ui_draw_homescreen_simplified(200); }},
-      {"h9_umgedreht_hoch", H0, 200, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Heating, 200); holdAtAngle(0); ui_draw_homescreen_simplified(200); }},
+      {"h9_runter", H0, 180, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cooling, 180); calm(); ui_draw_homescreen_simplified(180); }},
+      {"h9_runter_wippt", H0 + 500, 180, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cooling, 180); calm(); ui_draw_homescreen_simplified(180); }},
+      {"h9_hoch", H0, 200, 350, 0, 201, false, [] { feedHistory(HomeCurve::Heating, 200); calm(); ui_draw_homescreen_simplified(200); }},
+      {"h9_umgedreht_hoch", H0, 200, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Heating, 200); calm(); ui_draw_homescreen_simplified(200); }},
       {"g_detail", T, 318, 350, 580, 201, false, [] { limitX10 = 650; atTemp(199); ui_draw_soldering_power_status(false); }},
       {"g_stopp", T, 350, 350, 90, 201, false, [] { limitX10 = 650; atTemp(199); pressed(false, 150 + 191); ui_draw_soldering_basic_status(false); }},
       // Other states, no board
-      {"s4_druck", 6000000 + 3000, 26, 335, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(0); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
-      {"s5_halten", 6000000 + 3000, 26, 335, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(0); pressed(true, 150 + 270); ui_draw_homescreen_simplified(26); }},
+      {"s4_druck", 6000000 + 3000, 26, 335, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
+      {"s5_halten", 6000000 + 3000, 26, 335, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(true, 150 + 270); ui_draw_homescreen_simplified(26); }},
       {"r4_detail_gedreht", T, 318, 350, 580, 201, false, [] { orient(false); limitX10 = 650; atTemp(199); ui_draw_soldering_power_status(false); }},
       {"r6_stopp_gedreht", T, 350, 350, 90, 201, false, [] { orient(false); limitX10 = 650; atTemp(199); pressed(false, 150 + 191); ui_draw_soldering_basic_status(false); }},
       // The menu: one list. Rows: 0 target, 1 lock, 2 boost, 3 sleep after, 4 sleep temp, 5 off after, 6 motion, 7 brightness, 8 rotation,

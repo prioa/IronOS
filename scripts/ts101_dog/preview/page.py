@@ -7,7 +7,7 @@ rendered, boards, out = sys.argv[1:4]
 BOARDS = [
     ('Detail, stop, temperature, sleep', [('g_detail', 'Detail view', 'Menu switch DETAILANSICHT'), ('g_stopp', 'Stop, rear held', '')]),
 ]
-OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter', 'Start, cooling'), ('h2_links20', 'Start, tilted left'), ('h4_spitze_unten', 'Start, tip down'), ('h5_geschuettelt_0', 'Start, shaken'),
+OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter', 'Start, cooling'), ('h2_blinzelt', 'Start, blinking'), ('h3_aufmerksam', 'Start, moved'), ('h4_hopser_2', 'Start, shaken'),
          ('k1_heizt_65w', 'Heating at 65 W'), ('k3_heizt_fast_da', 'Heating, nearly there'), ('k4_heizt_gedreht', 'Heating, turned'), ('l1_bereit_350', 'Soldering, ready 350°'), ('l2_plus_370_heizt', 'After +: 370°, heating'),
          ('l3_bereit_370', 'Ready 370°'), ('l4_minus_350_kuehlt', 'After −: cooling'), ('l5_platine_bleifrei_heizt', 'Longest name'), ('l10_gedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('s03_schlaf_z_2', 'Sleep'), ('s32_gedreht', 'Sleep, turned'), ('s22_wach_bild3', 'Sleep, waking'), ('r6_stopp_gedreht', 'Stop, turned'), 
          ('s4_druck', 'Front pressed'), ('s5_halten', 'Front held'), ('s31_aus_nach_aus', 'Sleep, auto-off disabled'),

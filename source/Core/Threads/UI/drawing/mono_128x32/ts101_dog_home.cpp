@@ -2,8 +2,8 @@
  * TS101_DOG_UI: the home screen. The dog on one side and the button pair next to the buttons; between them the statistics
  * and the temperature curve of the last 10 minutes. Held the other way round the blocks swap sides, nothing is mirrored.
  *
- * Tilt is one axis in the plane of the screen: the angle of the iron's long axis to the horizon. That is 0 both lying flat on
- * the table and held level with the screen towards you, which an angle from two axes of the screen would not be.
+ * The dog is never deformed: it sits with its head relaxed and blinks now and then, looks up with its ears raised when the iron
+ * is moved and hops when it is shaken. Only how strongly the reading changes counts, so no sensor axis has to be known.
  */
 #include "ts101_dog_ui.hpp"
 #ifdef TS101_DOG_UI
@@ -13,10 +13,9 @@
 #include "ui_drawing.hpp"
 #include <string.h>
 
-// The sensor axis along the iron and the sign that makes "tip down" positive, derived from the drivers and not yet checked
-// on the hardware. If the head turns the wrong way on the iron, this is the line to change.
-#define DOG_ACCEL_ALONG      0
-#define DOG_ACCEL_ALONG_SIGN (+1)
+// To tune on the iron: how much change counts as moved, in sixteenths of gravity, and how strong a reading counts as a shake
+#define DOG_MOVED_SIXTEENTHS 2
+#define DOG_SHAKE_X10        16
 
 volatile int16_t dogAccelRaw[3] = {0, 0, 0};
 
@@ -93,31 +92,26 @@ void dogHomeTick() {
 
 // ---- Motion: 8 updates a second, integers only ----
 #define MOTION_TICKS  (TICKS_SECOND / 8)
-#define SHAKE_HOLD    (TICKS_SECOND / 2) // a shake is seen at 10 Hz at most: it counts as going on in between
-#define TILT_FULL_DEG 15                 // the lean is full at this angle
-#define TIP_DOWN_ON   45
-#define TIP_DOWN_OFF  35
-#define FADE_FRAMES   3                  // tilt and tip down come and go over this many frames
-#define SHAKE_FRAMES  8
+#define ALERT_HOLD    (TICKS_SECOND * 3 / 2) // it stays alert at least this long, so that it does not flicker
+#define HOP_PAUSE     TICKS_SECOND           // between two hops
+#define BLINK_TICKS   (TICKS_100MS * 2)
 #define DOG_HOME_SIZE 32
 #define HEAD_ROWS     14 // rows 0-13 are the head
-#define SHEAR_ROW     18 // the shear leaves this row where it is
 
-// asin(i / 16) in degrees * 10
-static const uint16_t ASIN_X10[17] = {0, 36, 72, 108, 145, 182, 220, 259, 300, 342, 387, 434, 486, 543, 610, 696, 900};
-// The shake: the lean s and the head's offset, alternating sides, calming down in the last two frames
-static const int8_t SHAKE_LEAN[SHAKE_FRAMES] = {3, -3, 3, -3, 3, -3, 2, -2};
-static const int8_t SHAKE_HEAD[SHAKE_FRAMES] = {2, -2, 2, -2, 2, -2, 1, -1};
+static const int8_t  HOP_RISE[]    = {1, 2, 1}; // pixels off the ground, frame by frame
+static const uint8_t BLINK_GAPS[]  = {3, 5, 2, 6, 4}; // seconds between blinks, so that it does not look like a clock
+#define HOP_FRAMES ((uint8_t)sizeof(HOP_RISE))
 
-static int32_t    filtered[3]; // 16 = 1 raw count
+static int32_t    filtered[3];       // 16 = 1 raw count
 static uint32_t   restMagnitude = 0; // 16 = 1 raw count, 0 = not known yet
 static TickType_t motionLast    = 0;
-static TickType_t shakeUntil    = 0;
-static bool       tipDown = false, motionStarted = false;
-static int8_t     rollDeg    = 0; // positive: tip end down
-static int8_t     lean3      = 0; // the lean s in thirds of a pixel, positive: the top to the right
-static uint8_t    downFrames = 0; // 0-FADE_FRAMES: how far the head has gone down
-static uint8_t    shakeFrame = 0; // 1-SHAKE_FRAMES while shaking, 0 otherwise
+static TickType_t alertUntil    = 0;
+static TickType_t hopPauseUntil = 0;
+static TickType_t nextBlink     = 0;
+static TickType_t blinkUntil    = 0;
+static bool       motionStarted = false, alert = false, blinking = false, hopPause = false;
+static uint8_t    hopFrame      = 0; // 1-HOP_FRAMES while hopping, 0 otherwise
+static uint8_t    blinkIndex    = 0;
 
 static uint32_t squareRoot(uint32_t value) {
   uint32_t root = 0;
@@ -134,24 +128,12 @@ static uint32_t squareRoot(uint32_t value) {
 
 static uint32_t magnitude(int32_t x, int32_t y, int32_t z) { return squareRoot((uint32_t)(x * x) + (uint32_t)(y * y) + (uint32_t)(z * z)); }
 
-static int16_t asinDeg(int32_t along, uint32_t length) {
-  const bool negative = along < 0;
-  uint32_t   ratio    = (uint32_t)(negative ? -along : along) * 256 / length; // 256 = 1
-  ratio               = ratio > 255 ? 255 : ratio;
-  const uint8_t  i    = ratio / 16;
-  const uint16_t x10  = ASIN_X10[i] + (ASIN_X10[i + 1] - ASIN_X10[i]) * (ratio % 16) / 16;
-  const int16_t  deg  = (x10 + 5) / 10;
-  return negative ? -deg : deg;
-}
-
-// a / b rounded to the nearest, halves away from 0
-static int16_t roundDiv(int16_t a, int16_t b) { return (a + (a < 0 ? -b / 2 : b / 2)) / b; }
+static inline bool reached(TickType_t now, TickType_t when) { return (int32_t)(now - when) >= 0; }
 
 void dogHomeMotionReset() {
   restMagnitude = 0;
-  motionStarted = tipDown = false;
-  rollDeg = lean3 = 0;
-  downFrames = shakeFrame = 0;
+  motionStarted = alert = blinking = hopPause = false;
+  hopFrame      = 0;
 }
 
 void dogHomeMotionUpdate() {
@@ -161,59 +143,69 @@ void dogHomeMotionUpdate() {
   }
   const int32_t raw[3] = {dogAccelRaw[0], dogAccelRaw[1], dogAccelRaw[2]};
   if (!motionStarted || now - motionLast > TICKS_SECOND) {
-    // First update here, or back from another screen: start from the present instead of swinging over from the past
+    // First update here, or back from another screen: start from the present, no reaction to what happened elsewhere
     for (uint8_t i = 0; i < 3; i++) {
       filtered[i] = raw[i] * 16;
     }
     motionStarted = true;
-    shakeUntil    = now;
     motionLast    = now;
+    alert         = blinking = hopPause = false;
+    hopFrame      = 0;
+    nextBlink     = now + BLINK_GAPS[blinkIndex] * TICKS_SECOND;
   } else {
     motionLast += MOTION_TICKS;
-    for (uint8_t i = 0; i < 3; i++) {
-      filtered[i] += (raw[i] * 16 - filtered[i]) * 3 / 10;
-    }
   }
 
   // The sensor's scale differs between chips, so everything below is relative to gravity as this one reports it
-  const uint32_t moved = magnitude(raw[0], raw[1], raw[2]);
-  if (moved == 0) {
-    dogHomeMotionReset(); // no sensor, or it could not be read
-    motionStarted = true;
-    return;
-  }
-  if (!restMagnitude) {
-    restMagnitude = moved * 16;
-  }
-  if (moved * 160 > restMagnitude * 14) { // 16 * 10 against 10 * 1.4
-    shakeUntil = now + SHAKE_HOLD;
-  } else if ((int32_t)(now - shakeUntil) >= 0) {
-    restMagnitude += ((int32_t)(moved * 16) - (int32_t)restMagnitude) / 8;
-  }
-  // A shake runs its 8 frames through, and starts again if the iron is still being shaken
-  if (shakeFrame) {
-    shakeFrame = shakeFrame < SHAKE_FRAMES ? shakeFrame + 1 : 0;
-  }
-  if (!shakeFrame && (int32_t)(now - shakeUntil) < 0) {
-    shakeFrame = 1;
+  const uint32_t strength = magnitude(raw[0], raw[1], raw[2]);
+  if (strength == 0) {
+    restMagnitude = 0; // no sensor, or it could not be read: it just sits and blinks
+  } else {
+    if (!restMagnitude) {
+      restMagnitude = strength * 16;
+    }
+    uint32_t change = 0; // 16 = 1 raw count
+    for (uint8_t i = 0; i < 3; i++) {
+      const int32_t difference = raw[i] * 16 - filtered[i];
+      change += difference < 0 ? -difference : difference;
+      filtered[i] += difference * 3 / 10;
+    }
+    const bool shaken = strength * 160 > restMagnitude * DOG_SHAKE_X10; // 16 * 10 against 10
+    if (change * 16 > restMagnitude * DOG_MOVED_SIXTEENTHS || shaken) {
+      alert      = true;
+      alertUntil = now + ALERT_HOLD;
+    } else if (alert && reached(now, alertUntil)) {
+      alert = false;
+    }
+    if (!shaken && !alert) {
+      restMagnitude += ((int32_t)(strength * 16) - (int32_t)restMagnitude) / 8;
+    }
+    if (hopPause && reached(now, hopPauseUntil)) {
+      hopPause = false;
+    }
+    if (hopFrame) {
+      if (++hopFrame > HOP_FRAMES) {
+        hopFrame      = 0;
+        hopPause      = true;
+        hopPauseUntil = now + HOP_PAUSE;
+      }
+    } else if (shaken && !hopPause) {
+      hopFrame = 1;
+    }
   }
 
-  const uint32_t length = magnitude(filtered[0] / 16, filtered[1] / 16, filtered[2] / 16);
-  rollDeg               = length ? asinDeg(DOG_ACCEL_ALONG_SIGN * filtered[DOG_ACCEL_ALONG] / 16, length) : 0;
-  tipDown               = rollDeg >= TIP_DOWN_ON || (tipDown && rollDeg >= TIP_DOWN_OFF);
-
-  // As the viewer sees it: right side down is positive. The tip is on the other side when held the other way round.
-  const int16_t roll   = normal() ? rollDeg : -rollDeg;
-  int16_t       target = tipDown ? 0 : -roll * 15 / TILT_FULL_DEG; // against the tilt, in thirds of a pixel
-  target               = target > 15 ? 15 : (target < -15 ? -15 : target);
-  const int16_t step   = 15 / FADE_FRAMES;
-  lean3 += target > lean3 + step ? step : (target < lean3 - step ? -step : target - lean3);
-  if (tipDown ? downFrames < FADE_FRAMES : downFrames > 0) {
-    downFrames += tipDown ? 1 : -1;
+  if (blinking && reached(now, blinkUntil)) {
+    blinking = false;
+  }
+  if (reached(now, nextBlink)) {
+    blinking   = !alert && !hopFrame; // looking up it does not blink, the next one comes in its time
+    blinkUntil = now + BLINK_TICKS;
+    blinkIndex = (blinkIndex + 1) % sizeof(BLINK_GAPS);
+    nextBlink  = now + BLINK_GAPS[blinkIndex] * TICKS_SECOND;
   }
 }
 
-// ---- The dog: the bitmap sheared about row 18, the head moved on its own ----
+// ---- The dog: always the bitmap, moved as a whole or with its head as one block ----
 static inline bool dogPixel(uint8_t x, uint8_t y) { return (dogHome[(y / 8) * DOG_HOME_SIZE + x] >> (y % 8)) & 1; }
 
 static void plot(int16_t x, int16_t y) {
@@ -222,40 +214,30 @@ static void plot(int16_t x, int16_t y) {
   }
 }
 
-static void drawDog(int16_t originX) {
-  int16_t s3, headX, headY = roundDiv(2 * downFrames, FADE_FRAMES);
-  if (shakeFrame) {
-    s3    = 3 * SHAKE_LEAN[shakeFrame - 1];
-    headX = SHAKE_HEAD[shakeFrame - 1];
-  } else {
-    s3    = lean3;
-    headX = roundDiv(2 * lean3, 15); // +-2 px at the full lean
-  }
-  headX += roundDiv(3 * downFrames, FADE_FRAMES); // tip down: the head goes 3 px right and 2 px down
+// rise lifts all of it, headDrop lowers the head on top of that; lids close the two eye gaps on row 7 and row 9
+static void drawPose(int16_t originX, uint8_t rise, uint8_t headDrop, bool lid7, bool lid9) {
   for (uint8_t y = 0; y < DOG_HOME_SIZE; y++) {
-    const bool    head  = y < HEAD_ROWS;
-    const int16_t shift = roundDiv(s3 * (SHEAR_ROW - y), 3 * SHEAR_ROW) + (head ? headX : 0);
+    const bool lid = (y == 7 && lid7) || (y == 9 && lid9);
     for (uint8_t x = 0; x < DOG_HOME_SIZE; x++) {
-      if (dogPixel(x, y)) {
-        plot(originX + x + shift, y + (head ? headY : 0));
+      if (dogPixel(x, y) || (lid && (x == 6 || x == 9))) {
+        plot(originX + x, y - rise + (y < HEAD_ROWS ? headDrop : 0));
       }
     }
   }
 }
 
-// Asleep: rows 7 and 9 of the two eye gaps filled, only row 8 stays open, and the head (rows 0-13) a pixel lower.
-// Waking: frame 1 opens row 9, frame 2 row 7, frame 3 lifts the head back up
-void dogDrawSleepingDog(int16_t originX, uint8_t wakeFrame) {
-  const uint8_t headDrop = wakeFrame < 3 ? 1 : 0;
-  for (uint8_t y = 0; y < DOG_HOME_SIZE; y++) {
-    const bool lidClosed = (y == 7 && wakeFrame < 2) || (y == 9 && wakeFrame < 1);
-    for (uint8_t x = 0; x < DOG_HOME_SIZE; x++) {
-      if (dogPixel(x, y) || (lidClosed && (x == 6 || x == 9))) {
-        plot(originX + x, y + (y < HEAD_ROWS ? headDrop : 0));
-      }
-    }
+static void drawDog(int16_t originX) {
+  if (hopFrame) {
+    const uint8_t rise = HOP_RISE[hopFrame - 1];
+    drawPose(originX, rise, rise, false, false); // the head stays down a bit in the jump, so the ears are not cut off at the top
+  } else {
+    drawPose(originX, 0, alert ? 0 : 1, blinking, blinking);
   }
 }
+
+// Asleep: rows 7 and 9 of the two eye gaps filled, only row 8 stays open, and the head a pixel lower.
+// Waking: frame 1 opens row 9, frame 2 row 7, frame 3 lifts the head back up
+void dogDrawSleepingDog(int16_t originX, uint8_t wakeFrame) { drawPose(originX, 0, wakeFrame < 3 ? 1 : 0, wakeFrame < 2, wakeFrame < 1); }
 
 // ---- The buttons: two boxes next to the buttons, so they change sides with the orientation ----
 static void outline(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
