@@ -7,6 +7,7 @@
 #ifdef TS101_DOG_UI
 #include "BSP.h"
 #include "OLED.hpp"
+#include "Settings.h"
 #include "configuration.h"
 
 // ---- Text ----
@@ -93,7 +94,9 @@ static uint8_t    consumed = 0;    // >0: the press has done its job. Counts dow
 static bool       locked   = false;
 
 ButtonState dogButtonsPoll(ButtonState buttons) {
-  const bool a = getButtonA(), b = getButtonB();
+  const bool swapped = getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled);
+  const bool a       = swapped ? getButtonB() : getButtonA();
+  const bool b       = swapped ? getButtonA() : getButtonB();
   if (a && b) {
     bothDown = true;
   } else if (!a && !b) {
@@ -131,9 +134,10 @@ bool dogHoldDone(bool front, TickType_t full) { return dogHeldTicks(front) >= fu
 // ---- Key row ----
 static const uint8_t KEY_ICON_WIDTH = 8;
 
-static bool frontOnRight() { return OLED::getRotation(); }
+// Swap buttons swaps the roles of the two buttons, so the label of the "front" role moves to the other side with them
+static bool frontOnRight() { return OLED::getRotation() != (getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled) != 0); }
 
-int16_t dogFrontKeyX() { return frontOnRight() ? OLED_WIDTH - KEY_ICON_WIDTH : 0; }
+int16_t dogFrontKeyX() { return OLED::getRotation() ? OLED_WIDTH - KEY_ICON_WIDTH : 0; }
 
 // Returns the free column next to the key, towards the middle
 static int16_t drawKey(DogKey key, bool front) {

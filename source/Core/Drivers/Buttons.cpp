@@ -6,6 +6,7 @@
  */
 #include "FreeRTOS.h"
 #include "OperatingModeUtilities.h"
+#include "Settings.h"
 #include "settingsGUI.hpp"
 #include "task.h"
 #include <Buttons.hpp>
@@ -28,8 +29,15 @@ ButtonState getButtonState() {
   static TickType_t previousStateChange = 0;
   const TickType_t  timeout             = TICKS_100MS * 4;
   uint8_t           currentState;
+#ifdef TS101_DOG_UI
+  // Swap buttons swaps their roles everywhere, not only in the menu or the temperature view
+  const bool swapped = getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled);
+  currentState       = (swapped ? getButtonB() : getButtonA()) << 0;
+  currentState |= (swapped ? getButtonA() : getButtonB()) << 1;
+#else
   currentState = (getButtonA()) << 0;
   currentState |= (getButtonB()) << 1;
+#endif
 
   if (currentState) {
     lastButtonTime = xTaskGetTickCount();

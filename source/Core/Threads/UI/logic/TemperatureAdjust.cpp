@@ -3,9 +3,6 @@
 #include "ui_drawing.hpp"
 
 #ifdef TS101_DOG_UI
-#define DOG_ADJUST_STEP_C 10
-#define DOG_ADJUST_STEP_F 20
-
 static void selectNextPreset() {
   static const uint16_t presetsC[] = TS101_PRESETS_C;
   static const uint16_t presetsF[] = TS101_PRESETS_F;
@@ -24,7 +21,7 @@ static void selectNextPreset() {
 
 static void stepSetPoint(bool up) {
   const bool    inF  = getSettingValue(SettingsOptions::TemperatureInF);
-  const int16_t step = inF ? DOG_ADJUST_STEP_F : DOG_ADJUST_STEP_C;
+  const int16_t step = getSettingValue(SettingsOptions::TempChangeLongStep); // 10 by default; a hold jumps a preset, so this is the only step
   const int16_t now  = getSettingValue(SettingsOptions::SolderingTemp);
   // To the next multiple of the step in that direction
   int16_t next = up ? (now / step + 1) * step : ((now - 1) / step) * step;
@@ -45,13 +42,12 @@ bool dogAdjustButtons(ButtonState buttons) {
     selectNextPreset();
     return false;
   }
-  const bool swapped = getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled);
   switch (buttons) {
   case BUTTON_F_SHORT:
-    stepSetPoint(!swapped);
+    stepSetPoint(true);
     break;
   case BUTTON_B_SHORT:
-    stepSetPoint(swapped);
+    stepSetPoint(false);
     break;
   case BUTTON_BOTH:
     return true;

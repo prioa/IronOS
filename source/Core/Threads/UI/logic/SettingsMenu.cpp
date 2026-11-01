@@ -1,3 +1,5 @@
+#include "configuration.h"
+#ifndef TS101_DOG_UI // TS101_DOG_UI: see SettingsMenuDog.cpp
 #include "OperatingModes.h"
 #include "ScrollMessage.hpp"
 
@@ -296,3 +298,4 @@ OperatingMode gui_SettingsMenu(const ButtonState buttons, guiContext *cxt) {
   // Otherwise we stay put for next render iteration
   return newMode;
 }
+#endif

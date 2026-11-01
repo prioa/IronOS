@@ -1183,3 +1183,10 @@ static void displayPowerSavingMenu(void) { displayMenu(2); }
 static void displayUIMenu(void) { displayMenu(3); }
 
 static void displayAdvancedMenu(void) { displayMenu(4); }
+
+#ifdef TS101_DOG_UI
+// The screens of these three stay as they are; SettingsMenuDog.cpp calls them
+void dogSetCalibrateCJC(void) { setCalibrate(); }
+void dogSetCalibrateVIN(void) { setCalibrateVIN(); }
+void dogSetResetSettings(void) { setResetSettings(); }
+#endif

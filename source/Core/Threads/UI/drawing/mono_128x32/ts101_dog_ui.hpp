@@ -72,6 +72,11 @@ void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon); //
 bool       dogDrawHold(const char *text, bool front, TickType_t full);
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
+// The settings menu, drawn on its own for the preview
+void dogDrawMenuList(uint8_t section, uint8_t pos);
+void dogDrawMenuValue(uint8_t section, uint8_t pos);
+#define DOG_MENU_ROOT 0xFF
+
 // The info pages (menu -> info); page 4 leads on to the raw debug values
 #define DOG_INFO_PAGES 5
 void dogDrawInfoPage(uint8_t page);

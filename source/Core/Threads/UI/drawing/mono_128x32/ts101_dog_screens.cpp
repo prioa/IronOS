@@ -306,8 +306,7 @@ void dogDrawTemperatureView(bool heating) {
   if (dogDrawHold(DOG_T("HALTEN: PRESET", "HOLD: PRESET"), true, DOG_HOLD_FULL) || dogDrawHold(DOG_T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL)) {
     return;
   }
-  const bool swapped = getSettingValue(SettingsOptions::ReverseButtonTempChangeEnabled);
-  dogDrawCorners(swapped ? iconMinus : iconPlus, swapped ? iconPlus : iconMinus);
+  dogDrawCorners(iconPlus, iconMinus);
   const int16_t x0 = STATUS_X0, x1 = STATUS_X1;
   auto          scaleX = [&](int32_t c) -> int16_t {
     c = c < 250 ? 250 : (c > 450 ? 450 : c);
