@@ -12,6 +12,14 @@
 #define SCRATCH_SESSION_DONE 1 // state 6 bit: session bookkeeping done for this entry
 static TickType_t boostEndedAt = 0;
 
+// However it ended, boost goes back to the soldering screen, without the dog, also if it began before the set point was reached
+static void boostFinished() {
+  if (!dogSolderTimerStart) {
+    dogSolderTimerStart = xTaskGetTickCount() | 1;
+  }
+  dogWokeHeating = false;
+}
+
 static TickType_t boostStartedAt = 0; // 0 = no boost running
 static bool       boostUsedUp    = false; // ran for the longest it may: stays off until the button is let go
 
@@ -32,8 +40,12 @@ static void limitBoost(const ButtonState buttons, guiContext *cxt) {
       boostUsedUp               = true;
       boostStartedAt            = 0;
       cxt->scratch_state.state2 = 0;
+      boostFinished();
     }
   } else {
+    if (boostStartedAt) {
+      boostFinished();
+    }
     boostStartedAt = 0;
     if (buttons != BUTTON_F_LONG) {
       boostUsedUp = false;
