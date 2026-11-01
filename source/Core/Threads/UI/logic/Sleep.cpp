@@ -14,6 +14,12 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
   if (dogPressed(true) || dogPressed(false)) {
     dogPressConsumed(); // the press that wakes the iron does nothing else: it must not stop the heater or open a view
   }
+  if (dogHandleTooHot()) {
+    currentTempTargetDegC = 0; // the handle limit holds in sleep too, the sleep temperature still heats
+    dogAlert              = DogAlert::Handle;
+    dogPressConsumed();
+    return OperatingMode::HomeScreen;
+  }
 #endif
 
   // user moved or pressed a button, go back to soldering

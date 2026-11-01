@@ -8,7 +8,7 @@
 #include "ui_drawing.hpp"
 #ifdef TS101_DOG_UI
 
-enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Step, Lock, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse };
+enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Step, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse };
 
 struct DogMenuItem {
   const char     *de, *en;
@@ -28,6 +28,7 @@ static const DogMenuItem solderItems[] = {
     {"BOOST-TEMP", "BOOST TEMP", "ZIEL, SOLANGE VORNE GEHALTEN WIRD", "TARGET WHILE THE FRONT BUTTON IS HELD", OPT(BoostTemp), Fmt::BoostTemp, nullptr},
     {"AUTOSTART", "AUTOSTART", "WAS BEIM EINSTECKEN PASSIERT", "WHAT HAPPENS WHEN POWERED ON", OPT(AutoStartMode), Fmt::Autostart, nullptr},
     {"SCHRITTWEITE", "STEP SIZE", "SO VIEL ÄNDERT EIN KLICK DIE TEMPERATUR", "HOW MUCH ONE CLICK CHANGES THE TEMPERATURE", OPT(TempChangeLongStep), Fmt::Step, nullptr},
+    {"SPITZENTYP", "TIP TYPE", "WELCHE SPITZE STECKT, AUTO ERKENNT SIE SELBST", "WHICH TIP IS FITTED, AUTO DETECTS IT", OPT(SolderingTipType), Fmt::Tip, nullptr},
     {"TASTENSPERRE", "BUTTON LOCK", "BEIDE TASTEN HALTEN SPERRT BEIM LÖTEN", "HOLD BOTH BUTTONS TO LOCK WHILE SOLDERING", OPT(LockingMode), Fmt::Lock, nullptr},
 };
 static const DogMenuItem sleepItems[] = {
@@ -150,6 +151,9 @@ static void formatValue(const DogMenuItem &item, char *out) {
     strcpy(out, T(de[v < 3 ? v : 0], en[v < 3 ? v : 0]));
     break;
   }
+  case Fmt::Tip:
+    strcpy(out, dogTipName());
+    break;
   case Fmt::DcCutoff:
     if (!v) {
       strcpy(out, "DC");

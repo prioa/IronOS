@@ -77,6 +77,8 @@ void dogDrawMenuList(uint8_t section, uint8_t pos);
 void dogDrawMenuValue(uint8_t section, uint8_t pos);
 #define DOG_MENU_ROOT 0xFF
 
+const char *dogTipName(); // the tip type picked in the menu, in the small font
+
 // The info pages (menu -> info); page 4 leads on to the raw debug values
 #define DOG_INFO_PAGES 5
 void dogDrawInfoPage(uint8_t page);

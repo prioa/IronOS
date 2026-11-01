@@ -69,6 +69,14 @@ bool dogWarnLocked(bool locked, ButtonState buttons) {
 
 DogAlert dogAlert = DogAlert::None;
 
+const char *dogTipName() {
+  // The order of tipType_t for the TS101: auto, then the three T12 tunings
+  static const char *const de[] = {"AUTO", "TS100 LANG", "PINE KURZ", "PTS200"};
+  static const char *const en[] = {"AUTO", "TS100 LONG", "PINE SHORT", "PTS200"};
+  const uint16_t           type = getSettingValue(SettingsOptions::SolderingTipType);
+  return type < sizeof(de) / sizeof(de[0]) ? (dogLangDE() ? de : en)[type] : "?";
+}
+
 bool dogHandleTooHot() {
   static TickType_t hotSince = 0;
   if (getHandleTemperature(0) < DOG_HANDLE_LIMIT_X10C) {

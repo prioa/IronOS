@@ -55,6 +55,64 @@ static const uint16_t NTCHandleLookup[] = {
     17096, 42, //
     16404, 44, //
     16061, 45, //
+#ifdef TS101_DOG_UI
+    // Extended for the handle warning at 70 C: the TDK curve (B = 4230 K) fitted to the rows above, within 9 counts
+    15729, 46, //
+    15393, 47, //
+    15060, 48, //
+    14730, 49, //
+    14403, 50, //
+    14080, 51, //
+    13760, 52, //
+    13444, 53, //
+    13133, 54, //
+    12825, 55, //
+    12522, 56, //
+    12224, 57, //
+    11930, 58, //
+    11641, 59, //
+    11357, 60, //
+    11078, 61, //
+    10803, 62, //
+    10534, 63, //
+    10270, 64, //
+    10011, 65, //
+    9757, 66, //
+    9509, 67, //
+    9265, 68, //
+    9027, 69, //
+    8794, 70, //
+    8566, 71, //
+    8343, 72, //
+    8125, 73, //
+    7913, 74, //
+    7705, 75, //
+    7502, 76, //
+    7304, 77, //
+    7111, 78, //
+    6923, 79, //
+    6740, 80, //
+    6561, 81, //
+    6386, 82, //
+    6216, 83, //
+    6051, 84, //
+    5890, 85, //
+    5733, 86, //
+    5580, 87, //
+    5431, 88, //
+    5286, 89, //
+    5146, 90, //
+    5009, 91, //
+    4875, 92, //
+    4746, 93, //
+    4619, 94, //
+    4497, 95, //
+    4377, 96, //
+    4262, 97, //
+    4149, 98, //
+    4039, 99, //
+    3933, 100, //
+#endif
 };
 #endif
 
@@ -69,7 +127,8 @@ int16_t getHandleTemperature(uint8_t sample) {
       return NTCHandleLookup[(i * 2) + 1] * 10;
     }
   }
-  return 45 * 10;
+  // Hotter than the table reaches: report its hottest row, so a reading past the end can trip a limit instead of hiding it
+  return NTCHandleLookup[sizeof(NTCHandleLookup) / sizeof(uint16_t) - 1] * 10;
 #endif
 #ifdef TEMP_TMP36
   // We return the current handle temperature in X10 C

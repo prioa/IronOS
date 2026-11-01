@@ -8,6 +8,10 @@ bool showExitMenuTransition = false;
 
 #ifdef TS101_DOG_UI
 static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext *cxt) {
+  if (buttons != BUTTON_NONE && cxt->scratch_state.state1 == 0) {
+    return OperatingMode::HomeScreen; // whatever was pressed on the way here: wait until the buttons are let go once
+  }
+  cxt->scratch_state.state1 = 1;
   if (dogAlert != DogAlert::None) {
     // An alert stays until it is safe again and a button says it was read; the iron can't start before that
     if (buttons != BUTTON_NONE && (dogAlert != DogAlert::Handle || getHandleTemperature(0) < DOG_HANDLE_LIMIT_X10C)) {

@@ -472,7 +472,7 @@ void dogDrawInfoPage(uint8_t page) {
   case 1: {
     label1 = DOG_T("TYP", "TYPE");
     label2 = DOG_T("WIDERSTAND", "RESISTANCE");
-    value1 = "AUTO";
+    value1 = dogTipName();
     char *end = dogFormat(left, getTipResistanceX10() / 10);
     *end++    = '.';
     *end++    = '0' + getTipResistanceX10() % 10;

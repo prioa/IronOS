@@ -4,26 +4,35 @@ Custom IronOS build for the Miniware TS101 (`TS101_DOG_UI` in `source/Core/BSP/M
 The screens live in `source/Core/Threads/UI/drawing/mono_128x32/ts101_dog_*`; they replace the dense 128x32
 soldering, sleep and simple home screens, which are compiled out with the flag set.
 
-- **Soldering, simple view**: large tip temperature, below it a heat-up bar with the set point, then the session
-  time once the set point is reached (survives sleep and set point changes, resets on the home screen).
-  While heating up a dog runs next to it; at temperature the dog head from the photo is there: barks "WUFF!" when the set point is reached, pants while the heater works
-  hard, flicks an ear after waking up and every few seconds.
-- **Soldering mode marker**: a blinking flame in the top corner in every soldering view; the other screens have none.
-- **Boost**: the dog runs across the whole screen, below it the tip temperature and the boost target.
-- **Soldering, curve view**: 18 s tip temperature curve (zoomed in round the set point, dotted set point line),
-  large tip temperature, segmented power bar, bottom row watts | volts | amps.
-- **Buttons while soldering**: front (+) click steps through the presets 300 / 350 / 400 °C
-  (`TS101_PRESETS_C` / `TS101_PRESETS_F`) with a full screen notice that says what the preset is for (`TS101_PRESET_USES`); front hold = boost; back (-) click steps through
-  the two views (dog, curve; setting `DogSolderView`); both buttons or back hold = home. The free set
-  point adjustment is on the home screen (front hold), as upstream. Presets and the view are saved on the home screen, not on every click, to spare the flash.
-- **Sleep**: the dog lies down and closes its eyes, "z Z Z" drifts up; tip temperature, input voltage and time asleep.
-- **Home**: dog head from the photo, the set point large with a thermometer (the tip temperature with a small down arrow, blinking with it, while it is still hot),
-  and a status bar with play (start soldering) and gear (settings) hints next to their buttons. Between them an item
-  changes every 3 s: "+ LÖTEN - MENÜ", input volts, lifetime soldering time (Σ h:mm, setting `TotalSolderMinutes`,
-  counted at temperature and saved on the home screen), last session, power limit, handle temperature, tip resistance,
-  firmware version. Picking the iron up after it lay still makes the dog run across and bark. Without a tip a full screen
-  "SPITZE FEHLT!" notice. The detailed home view adds the lifetime time as Σ h:mm.
-- **Warnings**: a warning triangle next to warnings narrow enough to leave room for it.
+Two buttons, five rules: the front button (tip end) acts (starts, opens, raises), the rear button (cable end) leads
+(moves on, lowers); holding the rear button leaves, on every screen; what a button does is written next to it and moves
+with it when the screen turns; a click never changes the heater; the screen shows by itself what matters.
+The screens use a 128x32 grid: stage on rows 0-22, row 23 for umlaut dots, key row on rows 24-31.
+
+- **Fonts**: Barlow Condensed SemiBold for the large digits (small degree ring, no C), Silkscreen for the small row
+  (umlaut dots set by hand), Barlow SemiBold for menu values. `make_fonts.py` turns `fonts/*.ttf` into
+  `ts101_dog_fonts.h/.cpp`; the licences are in `fonts/` (SIL OFL 1.1).
+- **Key row** (`ts101_dog_keys.cpp`): reads `getButtonA/getButtonB` directly. A pressed button inverts its field; held, the
+  row fills from that button's side with what will happen, letting go cancels. A press that did its job (a stop, a wake-up)
+  counts for nothing more until released.
+- **Home**: dog head, the set point (HEISS and the tip while it is still hot), key row LÖTEN | supply | MENÜ.
+  Front click solders, rear click opens the menu, front hold opens the temperature, rear hold does nothing.
+- **Soldering**: heating up, the dog runs and the curve grows in the bottom row; at temperature no dog, but set point, input
+  volts and handle temperature, a 27 px curve and the tip temperature; the bottom row changes by itself: WUFF! BEREIT,
+  session time, watts with a load bar, sleep countdown. Rear click: the second view, a 72 px curve with watts, volts and
+  calculated amps (~). Front hold: boost while held, the dog runs across. Rear hold: stop after a 1 s bar.
+- **Temperature**: front click while soldering opens it, the heater stays on. Click +/- one step (setting step size,
+  10 by default), front hold one preset further (300/350/400, `TS101_PRESETS_C`), never to the maximum; on a preset the
+  use is shown instead of the curve. Closes after 2 s or with rear hold. Clicks right after a boost are ignored
+  (upstream #1663). Changes made while soldering are saved on the home screen.
+- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels, a visible
+  ZURÜCK at the end of every list, each value saves itself when it is left. After 3 s a help text runs through the key row.
+- **Info**: five pages (power, tip, handle and side, statistics, system); the raw debug values are behind System.
+- **Sleep**: the dog lies down; tip temperature, time asleep, HEBEN!. Any button wakes the iron and does nothing else.
+- **Interruptions**: full screen with what is wrong and what it means: no tip, undervoltage, thermal runaway, handle too hot
+  (`DOG_HANDLE_LIMIT_X10C`, 70 C for 2 s: the heater stops, and the iron won't start until the handle is cooler; the handle
+  NTC table is extended up to 100 C for this), button lock.
+- **Languages**: German texts in the DE build, English in every other build (the fonts only have Latin letters).
 - **128x32 boot logo**: animated logo format `0xAB` (see `source/Core/Drivers/BootLogo.cpp`), stored in the 5K at
   95K-100K. The app is limited to 95K (`flash_size` in `source/Makefile`); every language fits (CJK ~92K).
   The animation is drawn upright, for holding the iron with the tip up: the dog with cap, sunglasses and bag walks in from
@@ -48,7 +57,9 @@ firmware with the logo on every push to `ts101-schaeferhund`.
 
 `preview/build.sh <out dir>` compiles the real drawing code against stubs for the RTOS and hardware
 (`preview/stubs`), renders the scenes from `preview/preview_state.cpp` as `.pbm` files, and
-`preview/sheet.py <out dir> sheet.png` puts them on one sheet. Needs `clang++` and a built `source/Core/Gen`.
+`preview/sheet.py <out dir> sheet.png` puts them on one sheet, `preview/compare.py <out dir> <mock dir> out.png` next to
+the mocks with the count of differing pixels. `preview/test_buttons.sh` runs the real button logic over simulated time
+and checks rule 2 on every screen and the #1663 case. Needs `clang++` and a built `source/Core/Gen`.
 
 ## Flashing from macOS
 

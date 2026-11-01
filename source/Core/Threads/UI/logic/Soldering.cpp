@@ -279,6 +279,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
   if (dogHandleTooHot()) {
     currentTempTargetDegC = 0; // heater control off; the home screen says why
     dogAlert              = DogAlert::Handle;
+    dogPressConsumed(); // a press still under way must not read as an answer to the alert
     cxt->transitionMode   = TransitionAnimation::Right;
     return OperatingMode::HomeScreen;
   }
@@ -292,6 +293,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
     heaterThermalRunawayCounter = 0;
 #ifdef TS101_DOG_UI
     dogAlert = DogAlert::Thermal;
+    dogPressConsumed();
 #endif
     cxt->transitionMode         = TransitionAnimation::Right;
     return OperatingMode::ThermalRunaway;
