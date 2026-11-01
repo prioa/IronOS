@@ -52,12 +52,6 @@ extern const uint8_t iconTinyCheck[];
 extern const uint8_t iconBoltSmall[];
 extern const uint8_t dogTrendDown[];
 extern const uint8_t dogTrendUp[];
-extern const uint8_t iconKeyDown[];
-extern const uint8_t iconKeyOpen[];
-extern const uint8_t iconKeyCycle[];
-extern const uint8_t iconKeyEdit[];
-extern const uint8_t iconMiniDown[];
-extern const uint8_t iconMiniRight[];
 extern const uint8_t *const dogZzz[DOG_ZZZ_STEPS];
 extern const uint8_t *const dogRun[DOG_RUN_FRAMES];
 

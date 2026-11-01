@@ -238,21 +238,21 @@ int main() {
   expectMode(OperatingMode::HomeScreen, "Halten vorne am Start tut nichts");
   expect(setPoint() == atStart, "und ändert nichts");
 
-  puts("== Menü: hinten nächster Eintrag, vorne je nach Art, hinten halten zurück");
-  auto toEntry = [](int n) {
+  puts("== Menü: eine Liste, hinten nächste Zeile, vorne je nach Art, hinten halten zurück");
+  auto rowsDown = [](int n) {
     for (int i = 0; i < n; i++) {
       click(false);
     }
   };
   setSettingValue(SettingsOptions::SolderingTemp, 335);
+  animated = false;
   click(false);
   expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü");
+  expect(animated, "und schiebt");
   animated = false;
-  toEntry(7);
-  expect(!animated, "sieben Klicks hinten: nichts schiebt");
-  expectMode(OperatingMode::SettingsMenu, "und wieder auf dem ersten Eintrag, kein Ende");
-  hold(true, 800);
-  expectMode(OperatingMode::SettingsMenu, "Halten vorne auf einem Eintrag tut nichts");
+  rowsDown(35);
+  expect(!animated, "35 Klicks hinten: nichts schiebt");
+  expectMode(OperatingMode::SettingsMenu, "wieder auf der ersten Zeile, kein Ende");
 
   puts("== Zahl: Eigenes Ziel");
   click(true);
@@ -268,26 +268,48 @@ int main() {
   expect(setPoint() == 335, "nach 1,5 s noch offen");
   idle(2500);
   click(false);
-  expect(setPoint() == 335, "nach 2 s ohne Taste zurück auf dem Eintrag: hinten ist wieder nächster Eintrag");
-  expectMode(OperatingMode::SettingsMenu, "bleibt im Menü");
-  toEntry(6); // wieder Eigenes Ziel
+  expect(setPoint() == 335, "nach 2 s ohne Taste zurück in der Liste: hinten ist wieder nächste Zeile");
+  rowsDown(34); // wieder Eigenes Ziel
   click(true);
   hold(false, 800);
-  click(true);
-  idle(100);
-  const uint16_t afterHold = setPoint();
-  expect(afterHold == 335, "hinten halten: sofort zurück, ohne -5");
-  idle(2500);
+  expectMode(OperatingMode::SettingsMenu, "hinten halten beim Ändern bleibt im Menü");
+  expect(setPoint() == 335, "und ohne -5");
   setSettingValue(SettingsOptions::SolderingTemp, MAX_TEMP_C);
   click(true);
   click(true);
   click(true);
   expect(setPoint() == MAX_TEMP_C, "oben bleibt es stehen");
-  hold(false, 800);
+  idle(2500);
   setSettingValue(SettingsOptions::SolderingTemp, 320);
 
+  puts("== Vorne halten: nach oben");
+  click(false);
+  click(false); // auf Boost-Ziel
+  const uint16_t boostBefore = getSettingValue(SettingsOptions::BoostTemp);
+  step(true, false, 560);
+  idle(150);
+  click(true);
+  click(true);
+  const uint16_t lockAfterUp = getSettingValue(SettingsOptions::LockingMode);
+  expect(lockAfterUp == 2 && getSettingValue(SettingsOptions::BoostTemp) == boostBefore, "vorne halten: eine Zeile hoch, auf Sperre");
+  setSettingValue(SettingsOptions::LockingMode, 0);
+  step(true, false, 560); // Eigenes Ziel
+  idle(150);
+  step(true, false, 560); // von der ersten Zeile auf die letzte: Debug
+  idle(150);
+  click(true);
+  expectMode(OperatingMode::DebugMenuReadout, "über den Anfang hinaus: letzte Zeile, Debug öffnet die Rohwerte");
+  click(false);
+  click(true);
+  expectMode(OperatingMode::DebugMenuReadout, "Klicks blättern dort");
+  animated = false;
+  hold(false, 800);
+  expectMode(OperatingMode::SettingsMenu, "hinten halten: zurück in die Liste");
+  expect(animated, "und schiebt zurück");
+  click(false); // wieder oben
+  click(false); // Sperre
+
   puts("== Auswahl: Sperre, Klick vorne sofort nächster Wert");
-  toEntry(4); // Sperre
   setSettingValue(SettingsOptions::LockingMode, 0);
   click(true);
   expect(getSettingValue(SettingsOptions::LockingMode) == 1, "vorne: Nur Boost, sofort");
@@ -297,57 +319,37 @@ int main() {
   click(true);
   expect(getSettingValue(SettingsOptions::LockingMode) == 0, "vorne: wieder Aus");
   expect(!dogLockArmed, "auf Aus: eine scharfe Sperre geht mit aus, sie ließe sich sonst nie mehr lösen");
-  toEntry(3); // zurück auf Eigenes Ziel
 
-  puts("== Untermenü: Schlaf");
-  toEntry(2);
-  animated = false;
-  click(true);
-  expect(animated, "Öffnen schiebt");
+  puts("== Zahl und Schalter weiter unten");
+  rowsDown(2); // Schlaf nach
   const uint16_t sleepBefore = getSettingValue(SettingsOptions::SleepTime);
   click(true);
   expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Schlaf nach: öffnet das Ändern");
   click(true);
   expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "vorne erhöht");
   hold(false, 800);
-  toEntry(4);
-  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "vier Klicks hinten: wieder am Anfang, Wert steht");
-  hold(false, 1000);
-  expectMode(OperatingMode::SettingsMenu, "hinten halten: eine Ebene zurück");
-  click(true);
-  hold(false, 1000);
-
-  puts("== Anzeige");
-  click(false); // vom Schlaf auf Anzeige
-  click(true);
-  toEntry(2); // Invertieren
+  rowsDown(7); // Invertieren
   const uint16_t inverted = getSettingValue(SettingsOptions::OLEDInversion);
   click(true);
   expect(getSettingValue(SettingsOptions::OLEDInversion) == !inverted, "Schalter: vorne schaltet sofort um");
   click(true);
   expect(getSettingValue(SettingsOptions::OLEDInversion) == inverted, "nochmal schaltet zurück");
-  toEntry(4); // Detailansicht
+  click(false); // Detailansicht
   click(true);
   expect(getSettingValue(SettingsOptions::DogSolderView) == 1, "Detailansicht schaltet");
   click(true);
-  hold(false, 1000);
 
-  puts("== Info");
-  toEntry(2); // Info
+  puts("== Anzeigezeilen");
+  rowsDown(14); // Griff, ... : die erste Anzeigezeile ist 25
+  const uint16_t setBefore = setPoint();
   click(true);
   click(true);
-  expectMode(OperatingMode::SettingsMenu, "Info: vorne auf einer normalen Seite tut nichts");
-  toEntry(4); // System
-  click(true);
-  expectMode(OperatingMode::DebugMenuReadout, "System: vorne öffnet die Rohwerte");
-  click(false);
-  click(true);
-  expectMode(OperatingMode::DebugMenuReadout, "Klicks blättern dort");
-  hold(false, 800);
-  expectMode(OperatingMode::SettingsMenu, "hinten halten: zurück auf die Seite");
+  expectMode(OperatingMode::SettingsMenu, "vorne auf einer Anzeigezeile tut nichts");
+  expect(setPoint() == setBefore, "und ändert nichts");
+  animated = false;
   hold(false, 1000);
-  hold(false, 1000);
-  expectMode(OperatingMode::HomeScreen, "hinten halten auf oberster Ebene: zum Start");
+  expectMode(OperatingMode::HomeScreen, "hinten halten in der Liste: zum Start");
+  expect(animated, "und schiebt zurück");
   setSettingValue(SettingsOptions::SleepTime, 6);
 
   puts("== Schlaf");
@@ -448,7 +450,7 @@ int main() {
   puts("== Menüzeilen");
   setSettingValue(SettingsOptions::SleepTime, 6);
   const char *tooWide = dogMenuRowOverflow();
-  expect(tooWide == nullptr, tooWide ? tooWide : "jeder Name, Bereich und der breiteste Wert passen");
+  expect(tooWide == nullptr, tooWide ? tooWide : "jeder Name passt mit dem breitesten Wert in eine Zeile, jeder Bereich auch");
 
   printf("\n%d Fehler\n", failures);
   return failures ? 1 : 0;
