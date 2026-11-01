@@ -359,7 +359,7 @@ void ui_draw_soldering_basic_sleep(TemperatureType_t tipTemp) { drawSleepScreen(
 
 /*
  * Home, the iron is not heating; the power supply is always in the key row because it decides how hard the iron can heat
- *   [ head ]  GESAMT 42:17                 <- total soldering time; while still hot HEISS, the tip temperature and a small arrow
+ *   [ head ]  GESAMT 42:17                 <- total soldering time; while still hot a warning triangle, the cooling curve and the tip
  *   [=] MENÜ     20V 90W      LÖTEN [>]
  * Picking the iron up after it lay still makes the dog run across and bark; alerts replace everything else.
  */
@@ -425,14 +425,13 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
   if (running) {
     // The dog has the upper part of the screen to itself
   } else if (tempOnDisplay) {
-    const char   *word  = DOG_T("HEISS", "HOT");
-    const uint8_t wordW = dogTextWidth(dogFontSmall, word);
-    const int16_t x     = areaX + (areaW - (wordW + 3 + TEMP_WIDTH)) / 2;
+    // A warning triangle over the cooling curve, the tip temperature on the right; the dots are 50 C, where it counts as cold
+    const int16_t tempX1 = areaX + areaW - 2;
+    const int16_t curveX = areaX + 2;
+    OLED::drawArea(curveX, 0, 9, 8, iconHot);
+    dogDrawCurve(curveX, tempX1 - TEMP_WIDTH - 3, 9, 21, 50, DogCurve::Cool, true);
     if (!(getSettingValue(SettingsOptions::CoolingTempBlink) && (now % 1000 < 300))) {
-      dogSmall(x, word, 15);
-      dogBig(x + wordW + 3, tipTemp);
-      dogBlit(x + (wordW - 8) / 2, 16, 8, 8, iconArrowDown8);
-      OLED::drawFilledRect(x + (wordW - 8) / 2, 23, x + (wordW - 8) / 2 + 7, 23, true);
+      dogBigRight(tempX1, tipTemp);
     }
   } else {
     // h:mm up to 99 hours, then the hours alone with a small H

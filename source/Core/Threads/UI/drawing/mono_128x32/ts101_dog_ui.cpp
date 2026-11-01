@@ -91,7 +91,6 @@ bool dogHandleTooHot() {
 
 // ---- Temperature curve ----
 #define DOG_CURVE_SAMPLES      72
-#define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2 + TICKS_100MS / 2) // 4 samples a second, 18 s on screen
 static uint16_t   curve[DOG_CURVE_SAMPLES];
 static uint8_t    curveHead  = 0; // next slot to write
 static uint8_t    curveCount = 0;
@@ -102,9 +101,9 @@ void dogCurveReset() {
   curveCount = 0;
 }
 
-void dogCurveSample(uint16_t tipC) {
+void dogCurveSample(uint16_t tipC, TickType_t interval) {
   const TickType_t now = xTaskGetTickCount();
-  if (curveCount && (now - curveLastSample) < DOG_CURVE_SAMPLE_TICKS) {
+  if (curveCount && (now - curveLastSample) < interval) {
     return;
   }
   curveLastSample  = now;
@@ -120,6 +119,12 @@ void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC,
   if (range == DogCurve::Heat) {
     lo = 20;
     hi = (int32_t)setC + 5;
+  } else if (range == DogCurve::Cool) {
+    lo = 20;
+    hi = 60;
+    for (uint8_t i = 0; i < curveCount; i++) {
+      hi = curve[i] > hi ? curve[i] : hi;
+    }
   } else if (range == DogCurve::Boost) {
     lo = (int32_t)setC - 120;
     hi = (int32_t)setC + 10;

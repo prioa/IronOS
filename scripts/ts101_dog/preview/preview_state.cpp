@@ -117,8 +117,8 @@ void previewApply(const PreviewScene &s) {
 }
 
 // The same simulated tip temperatures as the mock
-enum class Series { Steady, Dip, Drop, Heat, Boost };
-static void fillSeries(Series kind) {
+enum class Series { Steady, Dip, Drop, Heat, Boost, Cool };
+static void fillSeries(Series kind, uint32_t spacing = 250) {
   dogCurveReset();
   const uint32_t now = previewTicks;
   for (int i = 0; i < 72; i++) {
@@ -129,9 +129,10 @@ static void fillSeries(Series kind) {
     case Series::Drop: t = i < 52 ? 320 : (320 - (i - 52) * 4 > 288 ? 320 - (i - 52) * 4 : 288); break;
     case Series::Heat: t = 25 + i * 155 / 71; break;
     case Series::Boost: t = i < 40 ? 320 : (320 + (i - 40) * 4 < 410 ? 320 + (i - 40) * 4 : 410); break;
+    case Series::Cool: t = 25 + (int)(295 * exp(-i / 110.0)); break; // 320 down to 180 over 3 minutes
     }
-    previewTicks = now - (71 - i) * 250;
-    dogCurveSample(t);
+    previewTicks = now - (71 - i) * spacing;
+    dogCurveSample(t, spacing);
   }
   previewTicks = now;
 }
@@ -146,7 +147,9 @@ std::vector<PreviewScene> previewScenes() {
       // Step 3: home, sleep, info, interruptions
       {"s1_start", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(26); }},
       {"s7_start_100h", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; settings[SettingsOptions::TotalSolderMinutes] = 123 * 60 + 4; ui_draw_homescreen_simplified(26); settings[SettingsOptions::TotalSolderMinutes] = 42 * 60 + 17; }},
-      {"s2_heiss", 6000000 + 3500, 180, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; ui_draw_homescreen_simplified(180); }},
+      {"s2_heiss", 6000000 + 3500, 180, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; fillSeries(Series::Cool, 2500); ui_draw_homescreen_simplified(180); }},
+      {"s8_heiss_gedreht", 6000000 + 3500, 180, 320, 0, 201, false, [] { orient(false); limitX10 = 900; vX10 = 200; fillSeries(Series::Cool, 2500); ui_draw_homescreen_simplified(180); }},
+      {"s9_heiss_frisch", 6000000 + 3500, 300, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; dogCurveReset(); for (int i = 0; i < 6; i++) { previewTicks += 2500; dogCurveSample(320 - i * 4, 2500); } ui_draw_homescreen_simplified(300); }},
       {"s3_schwach", 6000000 + 3000, 26, 320, 0, 90, false, [] { limitX10 = 180; ui_draw_homescreen_simplified(26); }},
       {"s4_druck", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 100); ui_draw_homescreen_simplified(26); }},
       {"s5_halten", 6000000 + 3000, 26, 320, 0, 201, false, [] { limitX10 = 900; vX10 = 200; pressed(true, 150 + 270); ui_draw_homescreen_simplified(26); }},

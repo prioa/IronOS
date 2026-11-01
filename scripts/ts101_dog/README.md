@@ -15,8 +15,8 @@ The screens use a 128x32 grid: stage on rows 0-22, row 23 for umlaut dots, key r
 - **Key row** (`ts101_dog_keys.cpp`): reads `getButtonA/getButtonB` directly. A pressed button inverts its field; held, the
   row fills from that button's side with what will happen, letting go cancels. A press that did its job (a stop, a wake-up)
   counts for nothing more until released.
-- **Home**: dog head, the total soldering time (GESAMT h:mm, only hours from 100 h on; HEISS and the tip while it is still
-  hot), key row LÖTEN | supply | MENÜ. Front click solders, rear click opens the menu, front hold opens the temperature,
+- **Home**: dog head, the total soldering time (GESAMT h:mm, only hours from 100 h on). While the tip is still hot: a warning
+  triangle, the cooling curve of the last 3 minutes (one sample every 2.5 s, dotted line at 50 C) and the tip. Key row LÖTEN | supply | MENÜ. Front click solders, rear click opens the menu, front hold opens the temperature,
   rear hold does nothing.
 - **Soldering**: heating up, the dog runs and the curve grows in the bottom row; at temperature no dog, but set point, input
   volts and handle temperature, a 27 px curve and the tip temperature; the bottom row changes by itself: WUFF! BEREIT,

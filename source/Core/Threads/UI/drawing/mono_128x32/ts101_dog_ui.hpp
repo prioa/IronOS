@@ -98,8 +98,11 @@ inline bool       dogLangDE() { return dogLanguageCode[0] == 'D' && dogLanguageC
 
 // Tip temperature history for the curve
 void dogCurveReset();
-void dogCurveSample(uint16_t tipC);
-enum class DogCurve { Steady, Heat, Boost }; // the vertical range: round the set point, from room temperature, up to the boost target
+#define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2 + TICKS_100MS / 2) // 4 samples a second: 18 s on screen while soldering
+#define DOG_COOL_SAMPLE_TICKS  (TICKS_SECOND * 5 / 2)                // one every 2.5 s: 3 minutes of cooling on the home screen
+void dogCurveSample(uint16_t tipC, TickType_t interval = DOG_CURVE_SAMPLE_TICKS);
+// The vertical range: round the set point, from room temperature, up to the boost target, from room temperature up to the hottest sample
+enum class DogCurve { Steady, Heat, Boost, Cool };
 // The last 18 s between the given columns and rows, newest on the right; dots = dotted set point line
 void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots);
 

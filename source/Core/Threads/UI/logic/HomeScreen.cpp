@@ -109,6 +109,11 @@ OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
   }
 #ifdef TS101_DOG_UI
   dogSetLocked(false);
+  if (!cxt->scratch_state.state2) {
+    cxt->scratch_state.state2 = 1; // a fresh cooling curve each time the home screen comes up
+    dogCurveReset();
+  }
+  dogCurveSample(TipThermoModel::getTipInC(), DOG_COOL_SAMPLE_TICKS);
   ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
   return handleDogHomeButtons(buttons, cxt);
 #else
