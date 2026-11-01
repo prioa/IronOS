@@ -2,23 +2,19 @@
 #define UI_DRAWING_TS101_DOG_UI_HPP_
 #include "configuration.h"
 #ifdef TS101_DOG_UI
+#include "Buttons.hpp"
 #include "FreeRTOS.h"
 #include "ts101_dog_fonts.h"
 #include "ts101_dog_sprites.h"
 #include <stdint.h>
 
-enum class DogPose { Sit, Wag, Pant, Bark };
-
 // Soldering session state, kept across trips through sleep and temperature adjust (driven by Soldering.cpp / Sleep.cpp)
 extern TickType_t dogSolderTimerStart; // tick the set point was first reached, 0 = still heating up
 extern uint16_t   dogHeatupStartTempC; // tip temperature when heating up started
-extern TickType_t dogPresetShownUntil; // the preset just picked is shown large until this tick
 extern TickType_t dogBarkUntil;        // the dog barks "WUFF!" until this tick
-extern TickType_t dogWakeUntil;        // the dog wags after waking up until this tick
 extern TickType_t dogSleepEnterTime;   // when sleep started, for the lie down animation
 extern uint32_t   dogLastSessionSeconds; // length of the last soldering session, for the home screen
 
-void dogDrawHead(int16_t x, DogPose pose);
 void dogDrawWuff(int16_t x, int8_t y);                  // y must be on a page boundary
 void dogDrawRunning(int16_t x, int8_t y);               // running dog, any position; clipped at the screen edge
 void dogDrawRunAcross();                                // the dog runs across the top 24 rows of the whole screen
@@ -39,13 +35,8 @@ void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *
 // Full screen notice: 24x24 icon on the left, one or two big lines, optional footer row under a rule
 void dogDrawNotice(const uint8_t *icon, const char *line1, const char *line2, const char *footer);
 
-// Full screen notice after picking a preset with a double click; returns true while it is showing
-bool dogDrawPresetNotice();
 // Called on the home screen: ends the soldering session and saves the lifetime soldering time
 void dogSessionEnded();
-
-// Pose for the dog at temperature: barking, wagging after waking, panting while heating hard, an occasional wag otherwise
-DogPose dogSolderingPose(uint32_t x10Watt, int32_t x10Limit);
 
 // ---- Text with the bitmap fonts, base = the row just below the letters ----
 uint8_t dogTextWidth(const DogFont &font, const char *text);
@@ -70,10 +61,12 @@ struct DogKey {
 #define DOG_HOLD_FULL  (TICKS_100MS * 6)     // the bar is full and the action fires
 #define DOG_HOLD_STOP  (TICKS_SECOND)        // the same for switching the heater off
 
-void       dogButtonsPoll();                // once per frame, follows the buttons themselves (getButtonA/getButtonB)
+// Once per frame, follows the buttons themselves (getButtonA/getButtonB); hides the events of a consumed press
+ButtonState dogButtonsPoll(ButtonState buttons);
 bool       dogPressed(bool front);          // down on its own, and not left over from the previous screen
 TickType_t dogHeldTicks(bool front);        // how long it has been down, 0 if not dogPressed
 void       dogPressConsumed();              // the press did its job: it counts for nothing more until released
+void       dogSetLocked(bool locked);       // button lock: no field inverts and no bar fills
 int16_t    dogFrontKeyX();                  // the column of the key icon on the front button's side
 void       dogDrawKeys(DogKey front, DogKey rear, const char *centre);       // words and icons, inverted while pressed
 void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon); // icons only, inverted while pressed
@@ -81,10 +74,24 @@ void       dogDrawCorners(const uint8_t *frontIcon, const uint8_t *rearIcon); //
 bool       dogDrawHold(const char *text, bool front, TickType_t full);
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
-// Tip temperature history for the curve in the detailed soldering view
+// ---- Temperature view: changes the set point; while soldering it lives inside the soldering mode, so the heater and every safety check keep running ----
+void dogAdjustOpened();                         // restarts the view for a fresh press
+bool dogAdjustButtons(ButtonState buttons);     // applies the buttons; true when the view should close
+void dogDrawTemperatureView(bool heating);      // set point, scale, and the curve or the preset's use
+#define DOG_ADJUST_TIMEOUT (TICKS_SECOND * 2)
+#define DOG_BOOST_CLICK_GUARD (TICKS_100MS * 8) // clicks this soon after a boost are ignored (upstream issue #1663)
+
+// Texts of the new screens: German in the DE build, English everywhere else (the fonts only have Latin letters)
+extern const char dogLanguageCode[];
+inline bool       dogLangDE() { return dogLanguageCode[0] == 'D' && dogLanguageCode[1] == 'E'; }
+#define DOG_T(de, en) (dogLangDE() ? (de) : (en))
+
+// Tip temperature history for the curve
 void dogCurveReset();
 void dogCurveSample(uint16_t tipC);
-void dogDrawCurve(int16_t x, uint8_t width, uint8_t height, uint16_t setC);
+enum class DogCurve { Steady, Heat, Boost }; // the vertical range: round the set point, from room temperature, up to the boost target
+// The last 18 s between the given columns and rows, newest on the right; dots = dotted set point line
+void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots);
 
 // Lifetime soldering time, counted while the set point is held and saved when back on the home screen
 void dogCountSolderTime();

@@ -1090,6 +1090,9 @@ def write_language(
     f.write(
         f"const bool HasFahrenheit = {('true' if lang.get('tempUnitFahrenheit', True) else 'false')};\n\n"
     )
+    f.write(
+        f'extern const char dogLanguageCode[];\nconst char dogLanguageCode[] = "{language_code}";\n\n'
+    )
 
     if not strings_bin:
         translation_strings_and_indices_text = get_translation_strings_and_indices_text(

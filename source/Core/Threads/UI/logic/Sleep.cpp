@@ -11,6 +11,9 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
     cxt->scratch_state.state5 = 1;
     dogSleepEnterTime         = xTaskGetTickCount(); // the dog lies down, then falls asleep
   }
+  if (dogPressed(true) || dogPressed(false)) {
+    dogPressConsumed(); // the press that wakes the iron does nothing else: it must not stop the heater or open a view
+  }
 #endif
 
   // user moved or pressed a button, go back to soldering

@@ -47,7 +47,7 @@ OperatingMode guiHandleDraw(void) {
   // Read button state
   ButtonState buttons = getButtonState();
 #ifdef TS101_DOG_UI
-  dogButtonsPoll();
+  buttons = dogButtonsPoll(buttons);
 #endif
   // Enforce screen on if buttons pressed, movement, hot tip etc
   if (buttons != BUTTON_NONE) {

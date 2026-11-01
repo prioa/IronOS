@@ -87,19 +87,29 @@ void dogBig(int16_t x, uint16_t value) {
 void dogBigRight(int16_t x1, uint16_t value) { dogBig(x1 - dogBigWidth(value) + 1, value); }
 
 // ---- Buttons ----
-static TickType_t heldSince[2]; // 0 = front, 1 = rear; 0 ticks = not held
-static bool       waitForRelease = false;
+static TickType_t heldSince[2];  // 0 = front, 1 = rear; 0 ticks = not held
+static bool       bothDown = false; // both buttons were down: lock or back, the one released last must not start anything
+static uint8_t    consumed = 0;    // >0: the press has done its job. Counts down after the release, so its click event is hidden too
+static bool       locked   = false;
 
-void dogButtonsPoll() {
+ButtonState dogButtonsPoll(ButtonState buttons) {
   const bool a = getButtonA(), b = getButtonB();
-  if (!a && !b) {
-    waitForRelease = false;
-  } else if (a && b) {
-    waitForRelease = true; // both is lock or back; the one released last must not start anything
+  if (a && b) {
+    bothDown = true;
+  } else if (!a && !b) {
+    bothDown = false;
   }
-  const TickType_t now = xTaskGetTickCount() | 1;
-  heldSince[0]         = (a && !waitForRelease) ? (heldSince[0] ? heldSince[0] : now) : 0;
-  heldSince[1]         = (b && !waitForRelease) ? (heldSince[1] ? heldSince[1] : now) : 0;
+  const bool       masked = consumed != 0;
+  const TickType_t now    = xTaskGetTickCount() | 1;
+  if (consumed && !a && !b) {
+    consumed--; // getButtonState reads the pins just before this, so this frame and the next can still report the click
+  } else if (consumed) {
+    consumed = 2;
+  }
+  const bool idle = bothDown || masked || locked;
+  heldSince[0]    = (a && !idle) ? (heldSince[0] ? heldSince[0] : now) : 0;
+  heldSince[1]    = (b && !idle) ? (heldSince[1] ? heldSince[1] : now) : 0;
+  return masked ? BUTTON_NONE : buttons;
 }
 
 bool dogPressed(bool front) { return heldSince[front ? 0 : 1] != 0; }
@@ -110,9 +120,11 @@ TickType_t dogHeldTicks(bool front) {
 }
 
 void dogPressConsumed() {
-  waitForRelease = true;
+  consumed     = 2;
   heldSince[0] = heldSince[1] = 0;
 }
+
+void dogSetLocked(bool isLocked) { locked = isLocked; }
 
 bool dogHoldDone(bool front, TickType_t full) { return dogHeldTicks(front) >= full; }
 

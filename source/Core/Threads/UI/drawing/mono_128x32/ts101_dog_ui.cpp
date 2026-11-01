@@ -5,29 +5,9 @@
 
 TickType_t dogSolderTimerStart = 0;
 uint16_t   dogHeatupStartTempC = 0;
-TickType_t dogPresetShownUntil = 0;
 TickType_t dogBarkUntil        = 0;
-TickType_t dogWakeUntil        = 0;
 TickType_t dogSleepEnterTime   = 0;
 uint32_t   dogLastSessionSeconds = 0;
-
-void dogDrawHead(int16_t x, DogPose pose) {
-  const uint8_t *sprite = dogHead;
-  switch (pose) {
-  case DogPose::Wag:
-    sprite = dogHeadWag;
-    break;
-  case DogPose::Pant:
-    sprite = dogHeadPant;
-    break;
-  case DogPose::Bark:
-    sprite = dogHeadBark;
-    break;
-  default:
-    break;
-  }
-  OLED::drawArea(x, 0, DOG_HEAD_WIDTH, DOG_HEAD_HEIGHT, sprite);
-}
 
 void dogDrawWuff(int16_t x, int8_t y) { OLED::drawArea(x, y, DOG_WUFF_WIDTH, 8, dogWuff); }
 
@@ -164,46 +144,6 @@ void dogDrawNotice(const uint8_t *icon, const char *line1, const char *line2, co
   }
 }
 
-bool dogDrawPresetNotice() {
-  if (!dogPresetShownUntil || xTaskGetTickCount() >= dogPresetShownUntil) {
-    return false;
-  }
-  OLED::clearScreen();
-  OLED::setCursor((OLED_WIDTH - (3 * 12 + 12)) / 2, 0); // three large digits and the 12 px °C symbol
-  OLED::printNumber(getSettingValue(SettingsOptions::SolderingTemp), 3, FontStyle::LARGE);
-  OLED::printSymbolDeg(FontStyle::EXTRAS);
-  static const uint16_t    presetsC[] = TS101_PRESETS_C;
-  static const uint16_t    presetsF[] = TS101_PRESETS_F;
-  static const char *const uses[]     = TS101_PRESET_USES;
-  const uint16_t          *presets    = getSettingValue(SettingsOptions::TemperatureInF) ? presetsF : presetsC;
-  for (uint8_t i = 0; i < sizeof(uses) / sizeof(uses[0]); i++) {
-    if (presets[i] == getSettingValue(SettingsOptions::SolderingTemp)) {
-      dogPrintLabel((OLED_WIDTH - dogLabelWidth(uses[i])) / 2, 24, uses[i]);
-    }
-  }
-  return true;
-}
-
-DogPose dogSolderingPose(uint32_t x10Watt, int32_t x10Limit) {
-  const TickType_t now = xTaskGetTickCount();
-  if (now < dogBarkUntil) {
-    return ((now / (TICKS_100MS * 3)) % 2) ? DogPose::Sit : DogPose::Bark;
-  }
-  if (now < dogWakeUntil) {
-    return ((now / (TICKS_100MS * 2)) % 2) ? DogPose::Sit : DogPose::Wag;
-  }
-  if (x10Limit > 0 && x10Watt * 100 > (uint32_t)x10Limit * 40) {
-    // Heating hard: pant
-    return ((now / (TICKS_100MS * 3)) % 2) ? DogPose::Sit : DogPose::Pant;
-  }
-  // Two quick wags every six seconds
-  uint32_t phase = now % (TICKS_SECOND * 6);
-  if (phase < TICKS_100MS * 8) {
-    return ((phase / (TICKS_100MS * 2)) % 2) ? DogPose::Sit : DogPose::Wag;
-  }
-  return DogPose::Sit;
-}
-
 // ---- Temperature curve ----
 #define DOG_CURVE_SAMPLES      72
 #define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2 + TICKS_100MS / 2) // 4 samples a second, 18 s on screen
@@ -230,40 +170,45 @@ void dogCurveSample(uint16_t tipC) {
   }
 }
 
-void dogDrawCurve(int16_t x, uint8_t width, uint8_t height, uint16_t setC) {
-  if (width > DOG_CURVE_SAMPLES) {
-    width = DOG_CURVE_SAMPLES;
-  }
-  const uint8_t count = curveCount < width ? curveCount : width;
-  // Vertical range: zoomed in round the set point so dips while soldering show up; it grows upwards for
-  // overshoot, and anything colder (heating up) runs off the bottom
-  int32_t lo = (int32_t)setC - 45, hi = (int32_t)setC + 15;
-  for (uint8_t i = 0; i < count; i++) {
-    uint16_t v = curve[(curveHead + DOG_CURVE_SAMPLES - count + i) % DOG_CURVE_SAMPLES];
-    hi         = v > hi ? v : hi;
-  }
-  const uint8_t bottom = height - 1;
-  auto          toY    = [&](int32_t v) -> uint8_t {
-    if (v <= lo) {
-      return bottom;
+void dogDrawCurve(int16_t x0, int16_t x1, uint8_t y0, uint8_t y1, uint16_t setC, DogCurve range, bool dots) {
+  int32_t lo = (int32_t)setC - 45, hi = (int32_t)setC + 15; // zoomed in round the set point so dips while soldering show up
+  if (range == DogCurve::Heat) {
+    lo = 20;
+    hi = (int32_t)setC + 5;
+  } else if (range == DogCurve::Boost) {
+    lo = (int32_t)setC - 120;
+    hi = (int32_t)setC + 10;
+  } else {
+    for (uint8_t i = 0; i < curveCount; i++) {
+      hi = curve[i] > hi ? curve[i] : hi; // overshoot grows the range upwards
     }
-    return bottom - ((v - lo) * bottom) / (hi - lo);
+  }
+  auto toY = [&](int32_t v) -> uint8_t {
+    v = v < lo ? lo : (v > hi ? hi : v);
+    return y1 - ((v - lo) * (y1 - y0)) / (hi - lo);
   };
-
-  // Dotted set point line
-  const uint8_t setY = toY(setC);
-  for (uint8_t i = 0; i < width; i += 3) {
-    OLED::drawFilledRect(x + i, setY, x + i, setY, false);
-  }
-  // Newest sample on the right; join neighbours with vertical strokes so steep changes stay visible
-  const int16_t start = x + width - count;
-  uint8_t       prevY = 0;
-  for (uint8_t i = 0; i < count; i++) {
-    uint8_t y = toY(curve[(curveHead + DOG_CURVE_SAMPLES - count + i) % DOG_CURVE_SAMPLES]);
-    if (i == 0) {
-      prevY = y;
+  if (dots) {
+    const uint8_t setY = toY(setC);
+    for (int16_t x = x0; x <= x1; x += 3) {
+      OLED::drawFilledRect(x, setY, x, setY, false);
     }
-    OLED::drawFilledRect(start + i, y < prevY ? y : prevY, start + i, y < prevY ? prevY : y, false);
+  }
+  // Every width shows the same 18 s; join neighbours with vertical strokes so steep changes stay visible
+  const uint8_t width = x1 - x0 + 1;
+  const uint8_t empty = DOG_CURVE_SAMPLES - curveCount;
+  bool          first = true;
+  uint8_t       prevY = 0;
+  for (uint8_t i = 0; i < width; i++) {
+    const uint8_t sample = ((uint16_t)i * DOG_CURVE_SAMPLES) / width;
+    if (sample < empty) {
+      continue;
+    }
+    const uint8_t y = toY(curve[(curveHead + sample - empty + DOG_CURVE_SAMPLES - curveCount) % DOG_CURVE_SAMPLES]);
+    if (first) {
+      prevY = y;
+      first = false;
+    }
+    OLED::drawFilledRect(x0 + i, y < prevY ? y : prevY, x0 + i, y < prevY ? prevY : y, false);
     prevY = y;
   }
 }

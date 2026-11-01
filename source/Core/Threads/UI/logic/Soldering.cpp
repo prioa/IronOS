@@ -6,27 +6,71 @@
 // State 1 = button locking  (0:unlocked+released, 1:unlocked, 2:locked, 3:locked+released)
 // State 2 = boost mode
 // State 3 = buzzer timer
-// State 6 = TS101_DOG_UI session bookkeeping done for this entry
+// State 6 = TS101_DOG_UI bit flags, see below
 
 #ifdef TS101_DOG_UI
-static void selectNextPreset() {
-  static const uint16_t presetsC[] = TS101_PRESETS_C;
-  static const uint16_t presetsF[] = TS101_PRESETS_F;
-  const bool            inF        = getSettingValue(SettingsOptions::TemperatureInF);
-  const uint16_t       *presets    = inF ? presetsF : presetsC;
-  const uint8_t         count      = sizeof(presetsC) / sizeof(presetsC[0]);
-  const uint16_t        current    = getSettingValue(SettingsOptions::SolderingTemp);
-  // Pick the first preset above the current set point, wrapping round to the lowest
-  uint16_t next = presets[0];
-  for (uint8_t i = 0; i < count; i++) {
-    if (presets[i] > current) {
-      next = presets[i];
-      break;
+#define SCRATCH_SESSION_DONE 1 // state 6 bit: session bookkeeping done for this entry
+#define SCRATCH_ADJUST_OPEN  2 // state 6 bit: the temperature view is showing; the heater stays on
+static TickType_t boostEndedAt = 0;
+
+static bool boostJustEnded() { return boostEndedAt && (xTaskGetTickCount() - boostEndedAt) < DOG_BOOST_CLICK_GUARD; }
+
+// Front handles, rear leads: a click only ever opens something or changes the view, never the heater
+static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt) {
+  if (cxt->scratch_state.state6 & SCRATCH_ADJUST_OPEN) {
+    if (dogAdjustButtons(buttons)) {
+      cxt->scratch_state.state6 &= ~SCRATCH_ADJUST_OPEN;
+      dogSettingsChanged(); // saved on the home screen: no flash write with the heater on, and it spares the flash
     }
+    return OperatingMode::Soldering;
   }
-  setSettingValue(SettingsOptions::SolderingTemp, next);
-  dogSettingsChanged(); // saved on the home screen, not on every click
-  dogPresetShownUntil = xTaskGetTickCount() + TICKS_SECOND;
+  if (dogHoldDone(false, DOG_HOLD_STOP)) {
+    dogPressConsumed();
+    cxt->transitionMode = TransitionAnimation::Right;
+    return OperatingMode::HomeScreen;
+  }
+  switch (buttons) {
+  case BUTTON_NONE:
+    if (cxt->scratch_state.state2) {
+      boostEndedAt = xTaskGetTickCount() | 1;
+    }
+    cxt->scratch_state.state2 = 0;
+    cxt->scratch_state.state1 = 0;
+    break;
+  case BUTTON_BOTH:
+    cxt->transitionMode = TransitionAnimation::Right;
+    return OperatingMode::HomeScreen;
+  case BUTTON_F_LONG:
+    if (getSettingValue(SettingsOptions::BoostTemp) && dogPressed(true)) {
+      cxt->scratch_state.state2 = 1;
+    }
+    break;
+  case BUTTON_F_SHORT:
+    if (!boostJustEnded()) {
+      cxt->scratch_state.state6 |= SCRATCH_ADJUST_OPEN;
+      dogAdjustOpened();
+    }
+    break;
+  case BUTTON_B_SHORT:
+    if (!boostJustEnded()) {
+      dogNextSolderView();
+    }
+    break;
+  case BUTTON_BOTH_LONG:
+    if (getSettingValue(SettingsOptions::LockingMode)) {
+      if (cxt->scratch_state.state1 == 0) {
+        if (warnUser(translatedString(Tr->LockingKeysString), buttons)) {
+          cxt->scratch_state.state1 = 2;
+        }
+      } else {
+        warnUser(translatedString(Tr->UnlockingKeysString), buttons);
+      }
+    }
+    break;
+  default:
+    break;
+  }
+  return OperatingMode::Soldering;
 }
 #endif
 
@@ -73,6 +117,9 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
     return OperatingMode::Soldering;
   }
 
+#ifdef TS101_DOG_UI
+  return handleDogButtons(buttons, cxt);
+#else
   bool detailedView = getSettingValue(SettingsOptions::DetailedIDLE) && getSettingValue(SettingsOptions::DetailedSoldering);
   // otherwise we are unlocked
   switch (buttons) {
@@ -92,17 +139,7 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
     }
     break;
   case BUTTON_F_SHORT:
-#ifdef TS101_DOG_UI
-    // The front button steps through the temperature presets
-    selectNextPreset();
-    break;
-#endif
   case BUTTON_B_SHORT:
-#ifdef TS101_DOG_UI
-    // The back button steps through the soldering views
-    dogNextSolderView();
-    break;
-#endif
     cxt->transitionMode = TransitionAnimation::Left;
     return OperatingMode::TemperatureAdjust;
   case BUTTON_BOTH_LONG:
@@ -122,6 +159,7 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
     break;
   }
   return OperatingMode::Soldering;
+#endif
 }
 
 OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
@@ -140,17 +178,16 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
    * --> Long hold double button to toggle key lock
    */
 #ifdef TS101_DOG_UI
-  if (!cxt->scratch_state.state6) {
-    cxt->scratch_state.state6 = 1;
-    if (cxt->previousMode == OperatingMode::Sleeping || cxt->previousMode == OperatingMode::Hibernating) {
-      dogWakeUntil = xTaskGetTickCount() + TICKS_SECOND;
-    } else if (cxt->previousMode != OperatingMode::TemperatureAdjust) {
-      // A new session starts unless we are only back from sleeping or adjusting the set point
+  if (!(cxt->scratch_state.state6 & SCRATCH_SESSION_DONE)) {
+    cxt->scratch_state.state6 |= SCRATCH_SESSION_DONE;
+    if (cxt->previousMode != OperatingMode::Sleeping && cxt->previousMode != OperatingMode::Hibernating) {
+      // A new session starts unless we are only back from sleeping
       dogSolderTimerStart = 0;
       dogHeatupStartTempC = TipThermoModel::getTipInC();
       dogCurveReset();
     }
   }
+  dogSetLocked(cxt->scratch_state.state1 >= 2);
 #endif
 
   // Update the setpoints for the temperature
@@ -197,7 +234,9 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #endif
   // Draw in the screen details
 #ifdef TS101_DOG_UI
-  if (getSettingValue(SettingsOptions::DogSolderView) == 1) {
+  if (cxt->scratch_state.state6 & SCRATCH_ADJUST_OPEN) {
+    dogDrawTemperatureView(true);
+  } else if (getSettingValue(SettingsOptions::DogSolderView) == 1) {
     ui_draw_soldering_power_status(cxt->scratch_state.state2);
   } else {
     ui_draw_soldering_basic_status(cxt->scratch_state.state2);
