@@ -66,7 +66,8 @@ firmware with the logo on every push to `ts101-schaeferhund`.
 (`preview/stubs`), renders the scenes from `preview/preview_state.cpp` as `.pbm` files, and
 `preview/sheet.py <out dir> sheet.png` puts them on one sheet, `preview/compare.py <out dir> <mock dir> out.png` next to
 the mocks with the count of differing pixels. `preview/test_buttons.sh` runs the real button logic over simulated time
-and checks rule 2 on every screen and the #1663 case. Needs `clang++` and a built `source/Core/Gen`.
+and checks rule 2 on every screen and the #1663 case. `preview/page.py <out dir> <out dir EN> out.html` puts every screen with
+the rules and the button table on one page. Needs `clang++` and a built `source/Core/Gen`.
 
 ## Flashing from macOS
 
