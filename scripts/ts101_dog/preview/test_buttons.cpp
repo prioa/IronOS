@@ -12,6 +12,7 @@
 void testSetPins(bool front, bool rear);
 void testSetHandle(int16_t x10C);
 void testSetTip(uint16_t c);
+const char *dogMenuRowOverflow();
 extern volatile TemperatureType_t currentTempTargetDegC;
 extern TickType_t                 lastMovementTime;
 
@@ -209,7 +210,19 @@ int main() {
   click(false);
   expectMode(OperatingMode::HomeScreen, "Klick hinten verlässt das Menü");
   click(false);
+  for (int i = 0; i < 5; i++) {
+    click(true); // Anzeige
+  }
   hold(true, 800);
+  click(true);
+  click(true);
+  click(true); // Invertieren
+  const uint16_t inverted = getSettingValue(SettingsOptions::OLEDInversion);
+  hold(true, 800);
+  expect(getSettingValue(SettingsOptions::OLEDInversion) == !inverted, "Schalter: Halten vorne schaltet sofort um");
+  expectMode(OperatingMode::SettingsMenu, "und bleibt in der Liste");
+  hold(true, 800);
+  expect(getSettingValue(SettingsOptions::OLEDInversion) == inverted, "nochmal Halten schaltet zurück");
   hold(false, 1000);
   expectMode(OperatingMode::SettingsMenu, "Halten hinten im Bereich: eine Ebene zurück");
   hold(false, 1000);
@@ -246,6 +259,11 @@ int main() {
   expect(dogAlert == DogAlert::None, "abgekühlt: ein Klick schließt die Warnung");
   expectMode(OperatingMode::HomeScreen, "und öffnet dabei nicht das Menü");
   testSetHandle(310);
+
+  puts("== Menüzeilen");
+  setSettingValue(SettingsOptions::SleepTime, 6);
+  const char *tooWide = dogMenuRowOverflow();
+  expect(tooWide == nullptr, tooWide ? tooWide : "jeder Name passt mit dem breitesten Wert in eine Zeile (DE und EN)");
 
   printf("\n%d Fehler\n", failures);
   return failures ? 1 : 0;

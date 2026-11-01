@@ -25,10 +25,12 @@ The screens use a 128x32 grid: stage on rows 0-22, row 23 for umlaut dots, key r
   10 by default), front hold one preset further (300/350/400, `TS101_PRESETS_C`), never to the maximum; on a preset the
   use is shown instead of the curve. Closes after 2 s or with rear hold. Clicks right after a boost are ignored
   (upstream #1663). Changes made while soldering are saved on the home screen.
-- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels. The rear
-  button always goes back, click or hold; a front click moves to the next point, holding it opens or changes. On a value a
-  front click raises it (wrapping round at the top), holding it raises it faster, the rear button is done; each value saves
-  itself when it is left. After 3 s a help text runs through the key row.
+- **Menu** (`SettingsMenuDog.cpp`): Temperatur, Info, Löten, Schlaf, Strom, Anzeige, System, at most two levels, shown as
+  lists of three rows (name left, value right, the picked row inverted, a scroll bar on the right edge). The rear button
+  always goes back, click or hold; a front click moves to the next row, holding it opens a list, flips a switch (on/off
+  settings and the unit) or makes the value in the row editable: then a front click raises it (wrapping round at the top),
+  holding it raises it faster, the rear button is done. Each value saves itself when it is left. After 3 s a help text
+  runs through the key row.
 - **Info**: five pages (power, tip, handle and side, statistics, system), the same buttons as the menu; holding the front
   button on System shows the raw debug values.
 - **Sleep**: the dog lies down; tip temperature, time asleep, HEBEN!. Any button wakes the iron and does nothing else.

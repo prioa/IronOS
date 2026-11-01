@@ -29,7 +29,11 @@ TickType_t                                    lastMovementTime = 0;
 uint16_t          getSettingValue(const enum SettingsOptions option) { return settings[option]; }
 void              setSettingValue(const enum SettingsOptions option, const uint16_t v) { settings[option] = v; }
 void              saveSettings() {}
-void              nextSettingValue(const enum SettingsOptions o) { settings[o]++; }
+// Wraps like the real one for the two-state settings the menu shows as switches; others only count up
+void nextSettingValue(const enum SettingsOptions o) {
+  const bool twoStates = o == SettingsOptions::OLEDInversion || o == SettingsOptions::TemperatureInF || o == SettingsOptions::ReverseButtonTempChangeEnabled || o == SettingsOptions::CalibrateCJC;
+  settings[o]          = (twoStates && settings[o] >= 1) ? 0 : settings[o] + 1;
+}
 void              prevSettingValue(const enum SettingsOptions o) { settings[o]--; }
 bool              isLastSettingValue(const enum SettingsOptions) { return false; }
 void              dogSetCalibrateCJC(void) {}
@@ -96,6 +100,9 @@ void previewApply(const PreviewScene &s) {
   settings[SettingsOptions::Sensitivity] = 6;
   settings[SettingsOptions::SleepTime]   = 1;
   settings[SettingsOptions::SolderingTipType] = 0;
+  settings[SettingsOptions::SleepTemp]          = 150;
+  settings[SettingsOptions::TempChangeLongStep] = 10;
+  settings[SettingsOptions::ShutdownTime]       = 10;
   tipC                                         = s.tipC;
   settings[SettingsOptions::SolderingTemp]     = s.setC;
   currentTempTargetDegC                        = s.setC;
@@ -162,9 +169,12 @@ std::vector<PreviewScene> previewScenes() {
       {"m5_toggle", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(3, 0); }},
       {"m6_edit", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 600; settings[SettingsOptions::SleepTime] = 11; dogDrawMenuValue(3, 1); }},
       {"m9_halten", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; pressed(false, 150 + 270); dogDrawMenuList(3, 1); }},
-      {"m10_hilfe", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 3001; settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(3, 1); }},
+      {"m10_hilfe", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks - 5000; settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(3, 1); }},
       {"m13_vorne_halten", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::SleepTime] = 10; pressed(true, 150 + 270); dogDrawMenuList(3, 1); }},
       {"i6_debug_halten", T, 26, 320, 0, 201, false, [] { pressed(true, 150 + 270); dogDrawInfoPage(4); }},
+      {"m14_anzeige_schalter", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::OLEDBrightness] = 3; settings[SettingsOptions::OrientationMode] = 2; settings[SettingsOptions::AnimationSpeed] = 2; dogDrawMenuList(5, 3); }},
+      {"m15_system", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::KeepAwakePulse] = 5; settings[SettingsOptions::ReverseButtonTempChangeEnabled] = 0; dogDrawMenuList(6, 4); }},
+      {"m16_strom", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; settings[SettingsOptions::USBPDMode] = 1; settings[SettingsOptions::PDNegTimeout] = 20; settings[SettingsOptions::PowerLimit] = 0; dogDrawMenuList(4, 0); }},
       {"m11_loeten_spitze", T, 26, 320, 0, 201, false, [] { lastButtonTime = previewTicks; dogDrawMenuList(2, 3); }},
       // Step 1: the key row (rows 23-31 are compared with the mock of the same name)
       {"k_s1_start", T, 26, 320, 0, 201, false, [=] { dogDrawKeys(solderKey, menuKey, "20V 90W"); }},

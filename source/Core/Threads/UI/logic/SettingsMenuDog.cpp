@@ -1,7 +1,8 @@
 /*
- * TS101_DOG_UI: the flat settings menu. Seven points, one level below them, and every value saves itself when it is left.
- * The rear button always goes back, click or hold. The front button moves on with a click and opens or changes when held;
- * on a value a click raises it and wraps round at the top.
+ * TS101_DOG_UI: the flat settings menu, as lists of three rows: name on the left, value on the right. Seven points, one
+ * level below them, and every value saves itself when it is left. The rear button always goes back, click or hold. The
+ * front button moves on with a click; held, it opens a list, flips a switch or makes the value in the row editable, where a
+ * click raises it and wraps round at the top.
  * The position lives in this file, not in the scratch state: the temperature view and the info pages are modes of their own.
  */
 #include "OperatingModes.h"
@@ -26,23 +27,23 @@ void dogSetResetSettings(void);
 
 #define OPT(name) SettingsOptions::name
 static const DogMenuItem solderItems[] = {
-    {"BOOST-TEMP", "BOOST TEMP", "ZIEL, SOLANGE VORNE GEHALTEN WIRD", "TARGET WHILE THE FRONT BUTTON IS HELD", OPT(BoostTemp), Fmt::BoostTemp, nullptr},
+    {"BOOST", "BOOST", "ZIEL, SOLANGE VORNE GEHALTEN WIRD", "TARGET WHILE THE FRONT BUTTON IS HELD", OPT(BoostTemp), Fmt::BoostTemp, nullptr},
     {"AUTOSTART", "AUTOSTART", "WAS BEIM EINSTECKEN PASSIERT", "WHAT HAPPENS WHEN POWERED ON", OPT(AutoStartMode), Fmt::Autostart, nullptr},
-    {"SCHRITTWEITE", "STEP SIZE", "SO VIEL ÄNDERT EIN KLICK DIE TEMPERATUR", "HOW MUCH ONE CLICK CHANGES THE TEMPERATURE", OPT(TempChangeLongStep), Fmt::Step, nullptr},
-    {"SPITZENTYP", "TIP TYPE", "WELCHE SPITZE STECKT, AUTO ERKENNT SIE SELBST", "WHICH TIP IS FITTED, AUTO DETECTS IT", OPT(SolderingTipType), Fmt::Tip, nullptr},
-    {"TASTENSPERRE", "BUTTON LOCK", "BEIDE TASTEN HALTEN SPERRT BEIM LÖTEN", "HOLD BOTH BUTTONS TO LOCK WHILE SOLDERING", OPT(LockingMode), Fmt::Lock, nullptr},
+    {"SCHRITT", "STEP", "SO VIEL ÄNDERT EIN KLICK DIE TEMPERATUR", "HOW MUCH ONE CLICK CHANGES THE TEMPERATURE", OPT(TempChangeLongStep), Fmt::Step, nullptr},
+    {"SPITZE", "TIP", "WELCHE SPITZE STECKT, AUTO ERKENNT SIE SELBST", "WHICH TIP IS FITTED, AUTO DETECTS IT", OPT(SolderingTipType), Fmt::Tip, nullptr},
+    {"SPERRE", "LOCK", "BEIDE TASTEN HALTEN SPERRT BEIM LÖTEN", "HOLD BOTH BUTTONS TO LOCK WHILE SOLDERING", OPT(LockingMode), Fmt::Lock, nullptr},
 };
 static const DogMenuItem sleepItems[] = {
-    {"BEWEGUNG ERKENNEN", "MOTION SENSING", "WIE EMPFINDLICH DER KOLBEN BEWEGUNG BEMERKT", "HOW EASILY THE IRON NOTICES MOVEMENT", OPT(Sensitivity), Fmt::Stage, nullptr},
+    {"BEWEGUNG", "MOTION", "WIE EMPFINDLICH DER KOLBEN BEWEGUNG BEMERKT", "HOW EASILY THE IRON NOTICES MOVEMENT", OPT(Sensitivity), Fmt::Stage, nullptr},
     {"SCHLAF NACH", "SLEEP AFTER", "ZEIT OHNE BEWEGUNG, BIS DER KOLBEN EINSCHLÄFT", "TIME WITHOUT MOVEMENT UNTIL THE IRON SLEEPS", OPT(SleepTime), Fmt::SleepTime, nullptr},
     {"SCHLAF-TEMP", "SLEEP TEMP", "SO WARM BLEIBT DIE SPITZE IM SCHLAF", "HOW WARM THE TIP STAYS WHILE ASLEEP", OPT(SleepTemp), Fmt::SleepTemp, nullptr},
     {"AUS NACH", "OFF AFTER", "ZEIT OHNE BEWEGUNG, BIS DIE HEIZUNG AUSGEHT", "TIME WITHOUT MOVEMENT UNTIL THE HEATER STOPS", OPT(ShutdownTime), Fmt::Minutes, nullptr},
 };
 static const DogMenuItem powerItems[] = {
-    {"DC-ABSCHALTUNG", "DC CUTOFF", "AB DIESER AKKUSPANNUNG SCHALTET ER AB", "BATTERY VOLTAGE WHERE THE IRON STOPS", OPT(MinDCVoltageCells), Fmt::DcCutoff, nullptr},
+    {"DC-GRENZE", "DC CUTOFF", "AB DIESER AKKUSPANNUNG SCHALTET ER AB", "BATTERY VOLTAGE WHERE THE IRON STOPS", OPT(MinDCVoltageCells), Fmt::DcCutoff, nullptr},
     {"PD-MODUS", "PD MODE", "WIE VIEL LEISTUNG VOM NETZTEIL ANGEFORDERT WIRD", "HOW MUCH POWER IS REQUESTED FROM THE SUPPLY", OPT(USBPDMode), Fmt::PdMode, nullptr},
     {"PD-TIMEOUT", "PD TIMEOUT", "WARTEZEIT AUF DAS PD-NETZTEIL BEIM START", "HOW LONG TO WAIT FOR A PD SUPPLY AT START", OPT(PDNegTimeout), Fmt::PdTimeout, nullptr},
-    {"LEISTUNGSGRENZE", "POWER LIMIT", "HÖCHSTE HEIZLEISTUNG", "HIGHEST HEATING POWER", OPT(PowerLimit), Fmt::Watts, nullptr},
+    {"LEISTUNG", "POWER", "HÖCHSTE HEIZLEISTUNG", "HIGHEST HEATING POWER", OPT(PowerLimit), Fmt::Watts, nullptr},
 };
 static const DogMenuItem displayItems[] = {
     {"EINHEIT", "UNIT", "GRAD CELSIUS ODER FAHRENHEIT", "DEGREES CELSIUS OR FAHRENHEIT", OPT(TemperatureInF), Fmt::Unit, nullptr},
@@ -50,12 +51,12 @@ static const DogMenuItem displayItems[] = {
     {"HELLIGKEIT", "BRIGHTNESS", "HELLIGKEIT DES DISPLAYS", "BRIGHTNESS OF THE SCREEN", OPT(OLEDBrightness), Fmt::Plain, nullptr},
     {"INVERTIEREN", "INVERT", "HELL UND DUNKEL TAUSCHEN", "SWAP LIGHT AND DARK", OPT(OLEDInversion), Fmt::OnOff, nullptr},
     {"ANIMATION", "ANIMATION", "TEMPO DER MENÜ-SYMBOLE", "SPEED OF THE MENU ICONS", OPT(AnimationSpeed), Fmt::Animation, nullptr},
-    {"LOGO-ZEIT", "LOGO TIME", "WIE LANGE DAS BOOT-LOGO LÄUFT", "HOW LONG THE BOOT LOGO RUNS", OPT(LOGOTime), Fmt::Logo, nullptr},
+    {"LOGO", "LOGO", "WIE LANGE DAS BOOT-LOGO LÄUFT", "HOW LONG THE BOOT LOGO RUNS", OPT(LOGOTime), Fmt::Logo, nullptr},
 };
 static const DogMenuItem systemItems[] = {
-    {"TEMP. KALIBRIEREN", "CALIBRATE TEMP", "BEIM NÄCHSTEN START, MIT KALTER SPITZE", "ON THE NEXT START, WITH A COLD TIP", OPT(CalibrateCJC), Fmt::OnOff, dogSetCalibrateCJC},
-    {"VOLT KALIBRIEREN", "CALIBRATE VOLTS", "ANZEIGE AN EIN MESSGERÄT ANGLEICHEN", "MATCH THE READING TO A METER", SettingsOptionsLength, Fmt::Action, dogSetCalibrateVIN},
-    {"KEEP-AWAKE-PULS", "KEEP-AWAKE PULSE", "HÄLT POWERBANKS WACH", "KEEPS POWER BANKS AWAKE", OPT(KeepAwakePulse), Fmt::Pulse, nullptr},
+    {"TEMP KALIBR.", "CALIBRATE TEMP", "BEIM NÄCHSTEN START, MIT KALTER SPITZE", "ON THE NEXT START, WITH A COLD TIP", OPT(CalibrateCJC), Fmt::OnOff, dogSetCalibrateCJC},
+    {"VOLT KALIBR.", "CALIBRATE VOLTS", "ANZEIGE AN EIN MESSGERÄT ANGLEICHEN", "MATCH THE READING TO A METER", SettingsOptionsLength, Fmt::Action, dogSetCalibrateVIN},
+    {"KEEP-AWAKE", "KEEP AWAKE", "HÄLT POWERBANKS WACH", "KEEPS POWER BANKS AWAKE", OPT(KeepAwakePulse), Fmt::Pulse, nullptr},
     {"TASTEN TAUSCHEN", "SWAP BUTTONS", "VORNE UND HINTEN TAUSCHEN IHRE ROLLEN", "FRONT AND REAR SWAP THEIR ROLES", OPT(ReverseButtonTempChangeEnabled), Fmt::OnOff, nullptr},
     {"ZURÜCKSETZEN", "RESET", "ALLE EINSTELLUNGEN AUF WERKSZUSTAND", "ALL SETTINGS BACK TO DEFAULTS", SettingsOptionsLength, Fmt::Action, dogSetResetSettings},
 };
@@ -104,8 +105,7 @@ static void formatValue(const DogMenuItem &item, char *out) {
       strcpy(out, off);
       break;
     }
-    strcpy(out, T("STUFE ", "LEVEL "));
-    dogFormat(out + strlen(out), v);
+    dogFormat(out, v);
     break;
   case Fmt::Temp:
   case Fmt::SleepTemp:
@@ -296,70 +296,125 @@ static void stepValue(const DogMenuItem &item, bool up) {
 }
 
 // ---- Drawing ----
-static void drawHeader(const char *title, uint8_t number, uint8_t total) {
-  dogSmall(0, title, 7);
-  if (total) {
-    char  text[8];
-    char *end = dogFormat(text, number);
-    *end++    = '/';
-    dogFormat(end, total);
-    dogSmallRight(OLED_WIDTH - 1, text, 7);
+#define ROWS        3
+#define ROW_HEIGHT  8
+#define VALUE_RIGHT 124 // values end here, the scroll bar is on column 127
+static uint8_t top = 0; // the first row on screen
+
+static bool isSwitch(const DogMenuItem &item) { return item.format == Fmt::OnOff || item.format == Fmt::Unit; }
+
+// 13x7 switch: off is an outline with the knob on the left, on is filled with the knob on the right
+static void drawSwitch(int16_t x1, int16_t y, bool on) {
+  const int16_t x0 = x1 - 12;
+  OLED::drawFilledRect(x0 + 1, y, x1 - 1, y, false);
+  OLED::drawFilledRect(x0 + 1, y + 6, x1 - 1, y + 6, false);
+  OLED::drawFilledRect(x0, y + 1, x0, y + 5, false);
+  OLED::drawFilledRect(x1, y + 1, x1, y + 5, false);
+  if (on) {
+    OLED::drawFilledRect(x0 + 1, y + 1, x1 - 1, y + 5, false);
+    OLED::drawFilledRect(x1 - 5, y + 2, x1 - 2, y + 4, true);
+  } else {
+    OLED::drawFilledRect(x0 + 2, y + 2, x0 + 5, y + 4, false);
   }
 }
 
-static void drawBigValue(const char *text) { dogText(dogFontHead, (OLED_WIDTH - dogTextWidth(dogFontHead, text)) / 2, 22, text); }
+static uint8_t listCount(uint8_t section) { return section == NO_SECTION ? SECTION_COUNT : sections[section].count; }
 
-static void drawListKeys(const char *holdDe, const char *holdEn, const DogMenuItem *item) {
-  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL) || (holdDe && dogDrawHold(T(holdDe, holdEn), true, DOG_HOLD_FULL))) {
+static void drawRow(uint8_t section, uint8_t index, uint8_t row, bool selected, bool editingValue) {
+  const int16_t base = row * ROW_HEIGHT + 7;
+  const int16_t y0   = row * ROW_HEIGHT;
+  if (section == NO_SECTION) {
+    dogSmall(2, T(sections[index].de, sections[index].en), base);
+    if (index == 0) {
+      char  text[8];
+      char *end = dogFormat(text, getSettingValue(SettingsOptions::SolderingTemp));
+      strcpy(end, "°");
+      dogSmallRight(VALUE_RIGHT, text, base);
+    } else {
+      dogBlit(VALUE_RIGHT - 7, y0, 8, 8, iconNext);
+    }
+  } else {
+    const DogMenuItem &item = sections[section].items[index];
+    dogSmall(2, T(item.de, item.en), base);
+    if (item.format == Fmt::Action) {
+      dogBlit(VALUE_RIGHT - 7, y0, 8, 8, iconNext);
+    } else if (isSwitch(item) && item.format == Fmt::OnOff) {
+      drawSwitch(VALUE_RIGHT, y0 + 1, getSettingValue(item.option));
+    } else {
+      char value[16];
+      formatValue(item, value);
+      dogSmallRight(VALUE_RIGHT, value, base);
+      if (editingValue) {
+        // Only the value is inverted while it changes, and it blinks so the row reads as "being changed"
+        if ((xTaskGetTickCount() / (TICKS_100MS * 4)) % 3) {
+          OLED::invertRect(VALUE_RIGHT - dogTextWidth(dogFontSmall, value) - 2, y0 + 1, VALUE_RIGHT + 1, y0 + 7);
+        }
+        return;
+      }
+    }
+  }
+  if (selected) {
+    OLED::invertRect(0, y0 + 1, VALUE_RIGHT + 1, y0 + 7);
+  }
+}
+
+static void drawList(uint8_t section, uint8_t pos, bool editingValue) {
+  const uint8_t count = listCount(section);
+  if (pos < top) {
+    top = pos;
+  } else if (pos >= top + ROWS) {
+    top = pos - ROWS + 1;
+  }
+  for (uint8_t row = 0; row < ROWS && top + row < count; row++) {
+    drawRow(section, top + row, row, top + row == pos, editingValue && top + row == pos);
+  }
+  // Scroll bar: where the three rows are in the whole list
+  const uint8_t span = 23;
+  const uint8_t len  = count > ROWS ? span * ROWS / count : span;
+  const uint8_t y    = count > ROWS ? (span - len) * top / (count - ROWS) : 0;
+  OLED::drawFilledRect(OLED_WIDTH - 1, y, OLED_WIDTH - 1, y + len - 1, false);
+}
+
+static const char *listTitle(uint8_t section) { return section == NO_SECTION ? T("MENÜ", "MENU") : T(sections[section].de, sections[section].en); }
+
+// The key row: back and next as icons, the name of the list between them; or the help text, or "saved"
+static void drawListKeys(uint8_t section, const DogMenuItem *item) {
+  const char *holdDe = "HALTEN: ÖFFNEN", *holdEn = "HOLD: OPEN";
+  if (item && item->format != Fmt::Action) {
+    holdDe = isSwitch(*item) ? "HALTEN: UMSCHALTEN" : "HALTEN: ÄNDERN";
+    holdEn = isSwitch(*item) ? "HOLD: SWITCH" : "HOLD: CHANGE";
+  }
+  if (dogDrawHold(T("HALTEN: ZURÜCK", "HOLD: BACK"), false, DOG_HOLD_FULL) || dogDrawHold(T(holdDe, holdEn), true, DOG_HOLD_FULL)) {
     return;
   }
   const TickType_t now = xTaskGetTickCount();
+  helpShowing          = item && now - lastButtonTime > HELP_TICKS && !dogPressed(true) && !dogPressed(false);
   if (savedAt && now - savedAt < SAVED_TICKS) {
     const char   *saved = T("GESPEICHERT", "SAVED");
     const uint8_t w     = dogTextWidth(dogFontSmall, saved) + 9;
     const int16_t x     = (OLED_WIDTH - w) / 2;
     OLED::drawArea(x, 24, 8, 8, iconCheck);
     dogSmall(x + 9, saved);
-    return;
-  }
-  helpShowing = item && now - lastButtonTime > HELP_TICKS && !dogPressed(true) && !dogPressed(false);
-  if (helpShowing) {
-    // The explanation runs through the key row until a button is pressed
+  } else if (helpShowing) {
+    // The explanation runs between the icons until a button is pressed
     const char   *text  = T(item->helpDe, item->helpEn);
     const int16_t width = dogTextWidth(dogFontSmall, text) + 32;
-    dogSmall(-(int16_t)(((now - lastButtonTime - HELP_TICKS) / (TICKS_100MS / 2)) % width), text);
-    return;
+    dogSmall(OLED_WIDTH - 10 - (int16_t)(((now - lastButtonTime - HELP_TICKS) / (TICKS_100MS / 2)) % (width + OLED_WIDTH - 20)), text);
+    OLED::drawFilledRect(0, 23, 9, 31, true);
+    OLED::drawFilledRect(OLED_WIDTH - 10, 23, OLED_WIDTH - 1, 31, true);
+  } else {
+    dogSmallCentre(10, OLED_WIDTH - 11, listTitle(section));
   }
-  dogDrawKeys({iconNext, T("WEITER", "NEXT")}, {iconBack, T("ZURÜCK", "BACK")}, nullptr);
+  dogDrawCorners(iconNext, iconBack);
 }
 
 void dogDrawMenuList(uint8_t section, uint8_t pos) {
-  if (section == NO_SECTION) {
-    drawHeader(T("MENÜ", "MENU"), pos + 1, SECTION_COUNT);
-    drawBigValue(T(sections[pos].de, sections[pos].en));
-    drawListKeys("HALTEN: ÖFFNEN", "HOLD: OPEN", nullptr);
-    return;
-  }
-  const DogMenuSection &s    = sections[section];
-  const DogMenuItem    &item = s.items[pos];
-  drawHeader(T(item.de, item.en), pos + 1, s.count);
-  char value[16];
-  formatValue(item, value);
-  drawBigValue(value);
-  if (item.format == Fmt::Action) {
-    drawListKeys("HALTEN: START", "HOLD: START", &item);
-  } else {
-    drawListKeys("HALTEN: ÄNDERN", "HOLD: CHANGE", &item);
-  }
+  drawList(section, pos, false);
+  drawListKeys(section, section == NO_SECTION ? nullptr : &sections[section].items[pos]);
 }
 
 void dogDrawMenuValue(uint8_t section, uint8_t pos) {
-  const DogMenuItem &item = sections[section].items[pos];
-  drawHeader(T(item.de, item.en), 0, 0);
-  OLED::invertRect(0, 0, OLED_WIDTH - 1, 7);
-  char value[16];
-  formatValue(item, value);
-  drawBigValue(value);
+  drawList(section, pos, true);
   if (dogDrawHold(T("HALTEN: FERTIG", "HOLD: DONE"), false, DOG_HOLD_FULL)) {
     return;
   }
@@ -375,6 +430,37 @@ void dogDrawMenuValue(uint8_t section, uint8_t pos) {
     OLED::drawFilledRect(42, 27, 42 + fill, 28, false);
   }
 }
+
+#ifdef BUTTON_TEST
+// Every name and the widest value its setting can show fit in one row; returns the first row that does not, or nullptr
+const char *dogMenuRowOverflow() {
+  static const uint16_t samples[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 50, 99, 100, 120, 180, 300, 450, 850};
+  for (uint8_t lang = 0; lang < 2; lang++) {
+    for (uint8_t sct = 2; sct < SECTION_COUNT; sct++) {
+      for (uint8_t i = 0; i < sections[sct].count; i++) {
+        const DogMenuItem &item  = sections[sct].items[i];
+        const char        *label = lang ? item.en : item.de;
+        uint8_t            widest = 13;
+        if (item.format != Fmt::OnOff && item.format != Fmt::Action) {
+          const uint16_t saved = getSettingValue(item.option);
+          for (uint16_t v : samples) {
+            setSettingValue(item.option, v);
+            char value[16];
+            formatValue(item, value);
+            const uint8_t w = dogTextWidth(dogFontSmall, value);
+            widest          = w > widest ? w : widest;
+          }
+          setSettingValue(item.option, saved);
+        }
+        if (2 + dogTextWidth(dogFontSmall, label) + 5 + widest > VALUE_RIGHT) {
+          return label;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+#endif
 
 // ---- Logic ----
 static void leaveValue() {
@@ -420,6 +506,7 @@ static OperatingMode leaveList(guiContext *cxt) {
   }
   position            = openSection; // back on the point we came from
   openSection         = NO_SECTION;
+  top                 = position >= ROWS ? position - ROWS + 1 : 0;
   cxt->transitionMode = TransitionAnimation::Left;
   return OperatingMode::SettingsMenu;
 }
@@ -431,6 +518,7 @@ OperatingMode gui_SettingsMenu(const ButtonState buttonsIn, guiContext *cxt) {
     if (cxt->previousMode == OperatingMode::HomeScreen) {
       openSection = NO_SECTION;
       position    = 0;
+      top         = 0;
       editing     = false;
       savedAt     = 0;
     }
@@ -466,12 +554,17 @@ OperatingMode gui_SettingsMenu(const ButtonState buttonsIn, guiContext *cxt) {
       }
       openSection         = position;
       position            = 0;
+      top                 = 0;
       cxt->transitionMode = TransitionAnimation::Left;
     } else {
       const DogMenuItem &item = sections[openSection].items[position];
       if (item.action) {
         item.action();
         saveSettings();
+      } else if (isSwitch(item)) {
+        stepValue(item, true);
+        saveSettings();
+        savedAt = xTaskGetTickCount() | 1;
       } else {
         editing = true;
         changed = false;
