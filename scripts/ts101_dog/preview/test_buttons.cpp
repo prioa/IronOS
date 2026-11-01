@@ -104,49 +104,119 @@ int main() {
   idle(500);
 
   puts("== Start");
-  hold(false, 2000);
-  expectMode(OperatingMode::HomeScreen, "Halten hinten tut am Start nichts");
+  hold(false, 800);
+  expectMode(OperatingMode::DebugMenuReadout, "Halten hinten am Start öffnet Info");
+  hold(false, 800);
+  expectMode(OperatingMode::HomeScreen, "Halten hinten führt zurück zum Start");
   click(true);
   expectMode(OperatingMode::Soldering, "Klick vorne startet das Löten");
   moved();
 
   puts("== Löten, Regel 2 und Abbruch");
-  hold(false, 500);
-  expectMode(OperatingMode::Soldering, "Halten hinten 0,5 s und loslassen bricht ab, Heizung bleibt an");
+  hold(false, 450);
+  expectMode(OperatingMode::Soldering, "Halten hinten 0,45 s und loslassen bricht ab, Heizung bleibt an");
   expect(currentTempTargetDegC == 320, "Heizung zielt weiter auf 320");
-  hold(false, 1300);
-  expectMode(OperatingMode::HomeScreen, "Halten hinten 1,3 s stoppt");
+  hold(false, 600);
+  expectMode(OperatingMode::HomeScreen, "Halten hinten 0,6 s stoppt");
+  expect(currentTempTargetDegC == 0, "Heizung aus");
   idle(500);
   expectMode(OperatingMode::HomeScreen, "Loslassen nach dem Stopp startet nichts");
+
+  puts("== Löten, beide Tasten stoppen sofort");
+  startSoldering();
+  step(true, true, 60);
+  expectMode(OperatingMode::HomeScreen, "beide Tasten: nach 60 ms Stopp, ohne loszulassen");
+  expect(currentTempTargetDegC == 0, "Heizung aus");
+  idle(300);
+  expectMode(OperatingMode::HomeScreen, "Loslassen danach startet nichts");
+  startSoldering();
+  step(true, false, 1000);
+  expect(currentTempTargetDegC == 420, "Boost läuft");
+  step(true, true, 60);
+  expectMode(OperatingMode::HomeScreen, "beide Tasten stoppen auch im Boost");
+  idle(300);
+  startSoldering();
+  click(true);
+  step(true, true, 60);
+  expectMode(OperatingMode::HomeScreen, "beide Tasten stoppen auch bei offener Temperatur");
+  idle(300);
+
+  puts("== Sperre am Start");
+  setSettingValue(SettingsOptions::LockingMode, 0);
+  step(true, true, 800);
+  idle(300);
+  expect(!dogLockArmed, "SPERRE aus im Menü: beide halten am Start tut nichts");
+  setSettingValue(SettingsOptions::LockingMode, 2);
+  step(true, true, 800);
+  idle(300);
+  expect(dogLockArmed, "SPERRE an: beide halten am Start sperrt");
+  expectMode(OperatingMode::HomeScreen, "und bleibt am Start");
+  idle(1600);
+  startSoldering();
+  const uint16_t lockedSet = setPoint();
+  click(true);
+  click(false);
+  hold(false, 800);
+  expectMode(OperatingMode::Soldering, "gesperrt: Tasten stoppen und öffnen nichts");
+  expect(setPoint() == lockedSet, "gesperrt: Solltemperatur bleibt");
+  idle(1200);
+  step(true, true, 60);
+  expectMode(OperatingMode::HomeScreen, "beide Tasten stoppen auch gesperrt");
+  expect(currentTempTargetDegC == 0, "Heizung aus");
+  idle(300);
+  step(true, true, 800);
+  idle(1800);
+  expect(!dogLockArmed, "am Start beide halten löst die Sperre");
+  setSettingValue(SettingsOptions::LockingMode, 0);
 
   puts("== Löten, Klicks ändern das Heizen nicht");
   startSoldering();
   const uint16_t before = setPoint();
   click(true);
-  expect(setPoint() == before, "Klick vorne ändert die Solltemperatur nicht");
-  expect(currentTempTargetDegC == before, "Heizung läuft weiter, während die Temperaturanzeige offen ist");
+  expect(setPoint() == before, "Klick vorne öffnet die Temperatur und ändert nichts");
+  expect(currentTempTargetDegC == before, "Heizung läuft weiter, während die Temperatur offen ist");
   click(true);
   click(true);
-  expect(setPoint() == before + 20, "zwei weitere Klicks vorne: +20");
+  expect(setPoint() == before + 10, "zwei weitere Klicks vorne: +10 in 5er-Schritten");
   click(false);
-  expect(setPoint() == before + 10, "Klick hinten: -10");
-  expect(currentTempTargetDegC == before + 10, "Heizung folgt dem neuen Sollwert");
+  expect(setPoint() == before + 5, "Klick hinten: -5");
+  expect(currentTempTargetDegC == before + 5, "Heizung folgt dem neuen Sollwert");
   hold(true, 3000);
-  expect(setPoint() == 350, "Halten vorne 3 s springt genau ein Preset weiter (330 auf 350)");
+  expect(setPoint() == 350, "Halten vorne 3 s springt genau ein Preset weiter (325 auf 350)");
   hold(false, 1000);
-  expectMode(OperatingMode::Soldering, "Halten hinten schließt die Temperaturanzeige, das Löten läuft weiter");
+  expectMode(OperatingMode::Soldering, "Halten hinten schließt die Temperatur, das Löten läuft weiter");
+  const uint16_t openedByRear = setPoint();
   click(false);
-  expect(getSettingValue(SettingsOptions::DogSolderView) == 1, "danach wechselt Klick hinten wieder die Ansicht");
-  click(true);
+  expect(setPoint() == openedByRear, "Klick hinten beim Löten öffnet die Temperatur und ändert nichts");
+  click(false);
+  expect(setPoint() == openedByRear - 5, "der nächste Klick hinten ist -5, sie ist also offen");
   idle(2500);
   click(false);
-  expect(getSettingValue(SettingsOptions::DogSolderView) == 0, "die Temperaturanzeige schließt nach 2 s von selbst");
+  expect(setPoint() == openedByRear - 5, "die Temperatur schließt nach 2 s von selbst");
+  idle(2500);
 
-  puts("== #1663: direkt nach dem Boost");
+  puts("== Boost");
   setSettingValue(SettingsOptions::SolderingTemp, 320);
   startSoldering();
   step(true, false, 1500);
   expect(currentTempTargetDegC == 420, "Halten vorne boostet auf 420");
+  expect(dogBoostSecondsLeft() <= 30 && dogBoostSecondsLeft() >= 28, "Restzeit läuft von 30 s");
+  moved();
+  step(true, false, 20000);
+  expect(currentTempTargetDegC == 420, "nach 21,5 s läuft er noch");
+  moved();
+  step(true, false, 9000);
+  expect(currentTempTargetDegC == 320, "nach 30,5 s ist Schluss, Taste noch unten");
+  moved();
+  step(true, false, 3000);
+  expect(currentTempTargetDegC == 320, "er startet nicht neu, solange die Taste unten bleibt");
+  expectMode(OperatingMode::Soldering, "das Löten läuft weiter");
+  idle(1000);
+  moved();
+  step(true, false, 1500);
+  expect(currentTempTargetDegC == 420, "nach dem Loslassen geht er wieder");
+
+  puts("== #1663: direkt nach dem Boost");
   idle(60);
   expect(currentTempTargetDegC == 320, "Loslassen beendet den Boost");
   click(true);
@@ -155,8 +225,9 @@ int main() {
   idle(800);
   click(true);
   click(true);
-  expect(setPoint() == 330, "später öffnet ein Klick wieder die Anzeige und der zweite erhöht");
+  expect(setPoint() == 325, "später öffnet ein Klick wieder die Anzeige und der zweite erhöht");
   idle(2500);
+  setSettingValue(SettingsOptions::SolderingTemp, 320);
 
   puts("== Temperatur vom Start aus");
   toHome();
@@ -165,73 +236,95 @@ int main() {
   hold(false, 1000);
   expectMode(OperatingMode::HomeScreen, "Halten hinten: fertig, zurück zum Start");
 
-  puts("== Menü: hinten immer zurück, vorne blättern, vorne halten öffnet");
+  puts("== Menü: hinten nächste Zeile, vorne öffnet, hinten halten zurück");
   click(false);
   expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü");
   animated = false;
-  click(true);
-  expect(!animated, "Klick vorne im Menü: nur die Markierung wandert, keine Bildschirm-Animation");
   click(false);
-  click(false);
+  expect(!animated, "Klick hinten im Menü: nur die Markierung wandert, keine Animation");
+  expectMode(OperatingMode::SettingsMenu, "und bleibt im Menü");
   click(true);
-  hold(true, 800);
-  expectMode(OperatingMode::DebugMenuReadout, "Klick vorne zu Info, Halten vorne öffnet die Info-Seiten");
+  expectMode(OperatingMode::DebugMenuReadout, "Klick vorne auf Info öffnet die Info-Seiten");
+
+  puts("== Info: vorne vor, hinten zurück, hinten halten raus");
   for (int i = 0; i < 4; i++) {
     click(true);
   }
   hold(true, 800);
   click(false);
-  expectMode(OperatingMode::DebugMenuReadout, "System: Halten vorne öffnet Debug, Klick hinten führt zurück zur Seite");
+  expectMode(OperatingMode::DebugMenuReadout, "System: Halten vorne öffnet Debug, Klick hinten blättert dort");
+  hold(false, 800);
+  expectMode(OperatingMode::DebugMenuReadout, "Halten hinten: zurück auf die Seite");
   click(false);
-  expectMode(OperatingMode::SettingsMenu, "Klick hinten verlässt die Info-Seiten zum Menü");
+  expectMode(OperatingMode::DebugMenuReadout, "Klick hinten: vorige Seite, bleibt in Info");
+  hold(false, 800);
+  expectMode(OperatingMode::SettingsMenu, "Halten hinten verlässt die Info-Seiten zum Menü");
   hold(true, 800);
-  expectMode(OperatingMode::DebugMenuReadout, "das Menü steht danach wieder auf Info");
-  click(false);
+  expectMode(OperatingMode::SettingsMenu, "Halten vorne in der Liste tut nichts");
+
   for (int i = 0; i < 6; i++) {
-    click(true); // Löten ... System, dann wieder Temperatur
+    click(false); // Löten ... System, dann wieder Temperatur
   }
-  hold(true, 800);
-  expectMode(OperatingMode::TemperatureAdjust, "Menü, Temperatur: Halten vorne öffnet die Temperatur");
+  click(true);
+  expectMode(OperatingMode::TemperatureAdjust, "Menü, Temperatur: Klick vorne öffnet die Temperatur");
   hold(false, 1000);
   expectMode(OperatingMode::SettingsMenu, "Halten hinten führt zurück ins Menü");
-  click(true);
-  click(true);
-  click(true);
+  click(false);
+  click(false);
+  click(false);
   animated = false;
-  hold(true, 800); // Schlaf
+  click(true); // Schlaf
   expect(animated, "Öffnen eines Bereichs schiebt weiterhin");
-  click(true);
+  click(false);
   const uint16_t sleepBefore = getSettingValue(SettingsOptions::SleepTime);
-  click(true);
-  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Klick vorne in der Liste blättert und ändert nichts");
-  click(true);
-  click(true);
-  click(true); // vier Punkte: einmal herum zurück auf Schlaf nach
-  hold(true, 800); // Schlaf nach: ändern
-  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Halten vorne öffnet den Wert, ohne ihn zu ändern");
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Klick hinten in der Liste ändert nichts");
+  click(true); // Schlaf nach: ändern
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Klick vorne öffnet den Wert, ohne ihn zu ändern");
   click(true);
   expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "Wert: Klick vorne erhöht");
   click(false);
-  expectMode(OperatingMode::SettingsMenu, "Klick hinten: Wert fertig");
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore, "Wert: Klick hinten verringert");
+  click(true);
+  hold(false, 800);
+  expectMode(OperatingMode::SettingsMenu, "Halten hinten: Wert fertig");
   click(false);
-  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "Klick hinten nach dem Wert verringert nichts");
-  expectMode(OperatingMode::SettingsMenu, "Klick hinten verlässt den Bereich");
+  expect(getSettingValue(SettingsOptions::SleepTime) == sleepBefore + 1, "danach ist Klick hinten wieder nächste Zeile");
   click(false);
-  expectMode(OperatingMode::HomeScreen, "Klick hinten verlässt das Menü");
   click(false);
-  for (int i = 0; i < 5; i++) {
-    click(true); // Anzeige
-  }
-  hold(true, 800);
+  click(false); // vier Punkte: zurück auf Schlaf nach
   click(true);
   click(true);
-  click(true); // Invertieren
+  const uint16_t autoSaved = getSettingValue(SettingsOptions::SleepTime);
+  idle(4000);
+  click(true);
+  expect(getSettingValue(SettingsOptions::SleepTime) == autoSaved + 1, "nach 4 s ist der Wert noch offen");
+  idle(5000);
+  click(false);
+  expect(getSettingValue(SettingsOptions::SleepTime) == autoSaved + 1, "nach 5 s speichert er selbst, Klick hinten ist wieder nächste Zeile");
+  hold(false, 1000);
+  expectMode(OperatingMode::SettingsMenu, "Halten hinten im Bereich: eine Ebene zurück");
+  click(false);
+  click(false); // Anzeige
+  click(true);
+  click(false);
+  click(false);
+  click(false); // Invertieren
   const uint16_t inverted = getSettingValue(SettingsOptions::OLEDInversion);
-  hold(true, 800);
-  expect(getSettingValue(SettingsOptions::OLEDInversion) == !inverted, "Schalter: Halten vorne schaltet sofort um");
+  click(true);
+  expect(getSettingValue(SettingsOptions::OLEDInversion) == !inverted, "Schalter: Klick vorne schaltet sofort um");
   expectMode(OperatingMode::SettingsMenu, "und bleibt in der Liste");
-  hold(true, 800);
-  expect(getSettingValue(SettingsOptions::OLEDInversion) == inverted, "nochmal Halten schaltet zurück");
+  click(true);
+  expect(getSettingValue(SettingsOptions::OLEDInversion) == inverted, "nochmal Klick schaltet zurück");
+  click(false);
+  click(false);
+  click(false); // Start mit Hund
+  click(true);
+  expect(getSettingValue(SettingsOptions::DogHomeVariant) == 1, "Menü: Start mit Hund schaltet");
+  click(true);
+  click(false); // Detailansicht
+  click(true);
+  expect(getSettingValue(SettingsOptions::DogSolderView) == 1, "Menü: Detailansicht schaltet");
+  click(true);
   hold(false, 1000);
   expectMode(OperatingMode::SettingsMenu, "Halten hinten im Bereich: eine Ebene zurück");
   hold(false, 1000);
@@ -239,20 +332,41 @@ int main() {
   setSettingValue(SettingsOptions::SleepTime, 6);
 
   puts("== Schlaf");
-  startSoldering();
-  lastMovementTime = previewTicks - 70000;
-  lastButtonTime   = previewTicks - 70000;
-  idle(300);
+  auto toSleep = [] {
+    startSoldering();
+    lastMovementTime = previewTicks - 70000;
+    lastButtonTime   = previewTicks - 70000;
+    idle(300);
+  };
+  toSleep();
   expectMode(OperatingMode::Sleeping, "nach einer Minute ohne Bewegung schläft der Kolben");
-  hold(false, 2000);
-  expectMode(OperatingMode::Soldering, "Halten hinten weckt nur und stoppt nicht");
-  lastMovementTime = previewTicks - 70000;
-  lastButtonTime   = previewTicks - 70000;
+  const uint16_t sleepSet = setPoint();
+  hold(false, 800);
+  expectMode(OperatingMode::HomeScreen, "Halten hinten im Schlaf: zum Start");
+  expect(currentTempTargetDegC == 0, "Heizung aus");
+  toSleep();
+  step(false, true, 200);
+  moved();
+  step(false, true, 500);
   idle(300);
+  expectMode(OperatingMode::HomeScreen, "auch wenn er sich beim Halten bewegt: zum Start");
+  expect(currentTempTargetDegC == 0, "Heizung aus");
+  toSleep();
+  click(false);
+  idle(100);
+  expectMode(OperatingMode::Soldering, "Klick hinten weckt");
+  click(false);
+  expect(setPoint() == sleepSet, "der Klick nach dem Wecken öffnet die Temperatur, der weckende tat nichts");
+  idle(2500);
+  toSleep();
   click(true);
-  click(false);
-  expect(getSettingValue(SettingsOptions::DogSolderView) == 1, "nach dem Aufwecken mit Klick vorne wechselt Klick hinten die Ansicht");
-  click(false);
+  idle(100);
+  expectMode(OperatingMode::Soldering, "Klick vorne weckt");
+  expect(setPoint() == sleepSet, "und ändert nichts");
+  toSleep();
+  step(true, true, 60);
+  expectMode(OperatingMode::HomeScreen, "beide Tasten im Schlaf: zum Start");
+  idle(300);
 
   puts("== Griff zu heiß");
   startSoldering();
