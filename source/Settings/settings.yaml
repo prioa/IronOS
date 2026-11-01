@@ -294,3 +294,8 @@ settings:
     max: 2500
     min: MIN_CALIBRATION_OFFSET
     name: CalibrationOffset2
+  - default: 0
+    increment: 1
+    max: 65535
+    min: 0
+    name: TotalSolderMinutes

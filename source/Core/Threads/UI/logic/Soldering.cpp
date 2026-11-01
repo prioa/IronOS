@@ -1,6 +1,7 @@
 
 #include "OperatingModes.h"
 #include "SolderingCommon.h"
+#include "ts101_dog_ui.hpp"
 #include "ui_drawing.hpp"
 // State 1 = button locking  (0:unlocked+released, 1:unlocked, 2:locked, 3:locked+released)
 // State 2 = boost mode
@@ -8,11 +9,7 @@
 // State 6 = TS101_DOG_UI session bookkeeping done for this entry
 
 #ifdef TS101_DOG_UI
-// Soldering session state that has to survive trips through sleep and temperature adjust
-TickType_t        dogSolderTimerStart = 0; // tick the set point was first reached, 0 = still heating up
-uint16_t          dogHeatupStartTempC = 0; // tip temperature when heating up started
-TickType_t        dogPresetShownUntil = 0; // the preset just picked is shown large until this tick
-static TickType_t dogFirstClickTime   = 0; // a single front click waiting to see if a second one follows
+static TickType_t dogFirstClickTime = 0; // a single front click waiting to see if a second one follows
 
 #define DOG_DOUBLE_CLICK_TICKS (TICKS_100MS * 4)
 
@@ -158,10 +155,13 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
   if (!cxt->scratch_state.state6) {
     cxt->scratch_state.state6 = 1;
     dogFirstClickTime         = 0;
-    // A new session starts unless we are only back from sleeping or adjusting the set point
-    if (cxt->previousMode != OperatingMode::Sleeping && cxt->previousMode != OperatingMode::Hibernating && cxt->previousMode != OperatingMode::TemperatureAdjust) {
+    if (cxt->previousMode == OperatingMode::Sleeping || cxt->previousMode == OperatingMode::Hibernating) {
+      dogWakeUntil = xTaskGetTickCount() + TICKS_SECOND;
+    } else if (cxt->previousMode != OperatingMode::TemperatureAdjust) {
+      // A new session starts unless we are only back from sleeping or adjusting the set point
       dogSolderTimerStart = 0;
       dogHeatupStartTempC = TipThermoModel::getTipInC();
+      dogCurveReset();
     }
   }
 #endif
@@ -193,6 +193,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #ifdef TS101_DOG_UI
     if (!dogSolderTimerStart) {
       dogSolderTimerStart = xTaskGetTickCount() | 1; // never 0, that means "not started"
+      dogBarkUntil        = xTaskGetTickCount() + TICKS_SECOND * 2;
     }
 #endif
     setStatusLED(LED_HOT);
@@ -203,6 +204,10 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
     setBuzzer(false);
   }
 
+#ifdef TS101_DOG_UI
+  dogCurveSample(TipThermoModel::getTipInC());
+  dogCountSolderTime();
+#endif
   // Draw in the screen details
   if (getSettingValue(SettingsOptions::DetailedSoldering)) {
     ui_draw_soldering_power_status(cxt->scratch_state.state2);

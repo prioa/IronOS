@@ -1,0 +1,47 @@
+name: TS101 German Shepherd build
+
+on:
+  push:
+    branches:
+      - ts101-schaeferhund
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container:
+      image: alpine:3.21
+    strategy:
+      matrix:
+        lang: ["DE", "EN"]
+
+    steps:
+      - name: Install dependencies (apk)
+        run: apk add --no-cache gcc-arm-none-eabi g++-arm-none-eabi newlib-arm-none-eabi findutils python3 py3-pip py3-pillow make git bash
+
+      - name: Install dependencies (python)
+        run: python3 -m pip install --break-system-packages bdflib pyyaml
+
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Git ownership exception
+        run: git config --global --add safe.directory /__w/IronOS/IronOS && git config --global safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build TS101 ${{ matrix.lang }}
+        run: cd source && make -j$(nproc) model=TS101 firmware-${{ matrix.lang }}
+
+      - name: Merge the animated boot logo
+        run: python3 scripts/ts101_dog/logo128.py source/Hexfile/TS101_${{ matrix.lang }}.hex source/Hexfile/TS101_${{ matrix.lang }}_HUND.hex source/Hexfile/logo.gif
+
+      - name: Archive firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: TS101_${{ matrix.lang }}_HUND
+          path: |
+            source/Hexfile/TS101_${{ matrix.lang }}_HUND.hex
+            source/Hexfile/TS101_${{ matrix.lang }}.hex
+            source/Hexfile/logo.gif
+            scripts/flash_ts101_macos.sh
+          if-no-files-found: error

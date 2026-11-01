@@ -1,6 +1,7 @@
 
 #include "Buttons.hpp"
 #include "OperatingModes.h"
+#include "ts101_dog_ui.hpp"
 #include "ui_drawing.hpp"
 
 bool showExitMenuTransition = false;
@@ -55,6 +56,9 @@ OperatingMode handleHomeButtons(const ButtonState buttons, guiContext *cxt) {
 OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
 
   currentTempTargetDegC = 0; // ensure tip is off
+#ifdef TS101_DOG_UI
+  dogSaveSolderTime(); // persist the lifetime soldering minutes counted in the last session
+#endif
   getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0);
   uint32_t tipTemp = TipThermoModel::getTipInC();
 

@@ -1,10 +1,17 @@
 #include "OperatingModes.h"
+#include "ts101_dog_ui.hpp"
 #include "ui_drawing.hpp"
 OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *cxt) {
 #ifdef NO_SLEEP_MODE
   return OperatingMode::Soldering;
 #endif
   // Drop to sleep temperature and display until movement or button press
+#ifdef TS101_DOG_UI
+  if (!cxt->scratch_state.state5) {
+    cxt->scratch_state.state5 = 1;
+    dogSleepEnterTime         = xTaskGetTickCount(); // the dog lies down, then falls asleep
+  }
+#endif
 
   // user moved or pressed a button, go back to soldering
   // If in the first two seconds we disable this to let accelerometer warm up

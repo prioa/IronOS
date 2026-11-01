@@ -1,5 +1,5 @@
 #include "ui_drawing.hpp"
-#ifdef OLED_128x32
+#if defined(OLED_128x32) && !defined(TS101_DOG_UI) // TS101_DOG_UI: see ts101_dog_screens.cpp
 #ifdef OLED_128x32_DENSE_UI // dense layout + compact font, only on models with the flash for it (see Sequre configuration.h)
 
 extern uint8_t buttonAF[sizeof(buttonA)];

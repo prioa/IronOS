@@ -1,6 +1,7 @@
 #include "Buttons.hpp"
 #include "OperatingModeUtilities.h"
 #include "OperatingModes.h"
+#include "ts101_dog_ui.hpp"
 #ifdef OLED_128x32
 bool warnUser(const char *warning, const ButtonState buttons) {
   OLED::clearScreen();
@@ -32,8 +33,16 @@ bool warnUser(const char *warning, const ButtonState buttons) {
       p += 2;
     }
   }
-  widest    = (chars > widest) ? chars : widest;
-  int16_t x = (OLED_WIDTH - static_cast<int16_t>(widest * charWidth)) / 2;
+  widest       = (chars > widest) ? chars : widest;
+  int16_t left = 0;
+#ifdef TS101_DOG_UI
+  // A sad dog next to warnings that leave room for it
+  if (static_cast<int16_t>(widest * charWidth) <= OLED_WIDTH - DOG_SIT_WIDTH) {
+    dogDrawSitting(0, DogPose::Sad);
+    left = DOG_SIT_WIDTH;
+  }
+#endif
+  int16_t x = left + (OLED_WIDTH - left - static_cast<int16_t>(widest * charWidth)) / 2;
   int16_t y = (OLED_HEIGHT - static_cast<int16_t>(lines * lineHeight)) / 2;
   if (x < 0) {
     x = 0;

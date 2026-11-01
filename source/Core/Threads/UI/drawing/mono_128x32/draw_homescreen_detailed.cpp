@@ -1,4 +1,5 @@
 #include "power.hpp"
+#include "ts101_dog_ui.hpp"
 #include "ui_drawing.hpp"
 #include <OperatingModes.h>
 #ifdef OLED_128x32
@@ -83,6 +84,9 @@ void ui_draw_homescreen_detailed(TemperatureType_t tipTemp) {
 #ifdef DUAL_TIP_SOCKETS
   OLED::setCursor(infoX, 24);
   OLED::print(getActiveTipChannel() ? SmallSymbolSocketTS : SmallSymbolSocketT12, FontStyle::TINY);
+#endif
+#ifdef TS101_DOG_UI
+  dogPrintTotalTime(infoX, 24);
 #endif
 }
 
