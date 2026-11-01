@@ -296,7 +296,7 @@ settings:
     name: CalibrationOffset2
   - default: 0
     increment: 1
-    max: 65535
+    max: 65534 # 0xFFFF marks a new, never written setting: it must be out of range so it is reset to 0
     min: 0
     name: TotalSolderMinutes
   - default: 0

@@ -179,7 +179,7 @@ void dogCountSolderTime() {
   if (countTicks >= 60 * TICKS_SECOND) {
     countTicks -= 60 * TICKS_SECOND;
     uint16_t total = getSettingValue(SettingsOptions::TotalSolderMinutes);
-    if (total < 65535) {
+    if (total < 65534) { // the setting's maximum, see settings.yaml
       setSettingValue(SettingsOptions::TotalSolderMinutes, total + 1);
       settingsUnsaved = true;
     }
