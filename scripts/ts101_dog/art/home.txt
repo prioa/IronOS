@@ -1,6 +1,6 @@
-# Bitmaps of the home screen, read by make_sprites.py. # = on, . = off, top row first, left = x0.
+# Bitmaps of the home and soldering screens, read by make_sprites.py. # = on, . = off, top row first, left = x0.
 # @name width height starts a bitmap; "tiny" lines are the 3x5 label font: character, then five rows.
-# K and L are not from the design: AKTUELL and TOTAL need them. C D F I Y Z, the digits and ° are for the soldering screens.
+# K and L are not from the design: AKTUELL and TOTAL need them. C D F I W Y Z, /, the digits and ° are for the soldering screens.
 
 @dogHome 32 32
 ....#......#....................
@@ -35,28 +35,6 @@
 ....##...##.....####..#####.....
 ...###...##..#########.#####....
 ...###..###..#######..######....
-
-@iconSliders 11 7
-.##........
-###########
-.##........
-...........
-.......##..
-###########
-.......##..
-
-@iconHomePlay 6 11
-#.....
-##....
-###...
-####..
-#####.
-######
-#####.
-####..
-###...
-##....
-#.....
 
 @dogTrot0 24 13
 ...................#.#..
@@ -118,13 +96,6 @@
 ....#..........#........
 ....##..........##......
 
-@iconTinyCheck 5 5
-....#
-...#.
-#.#..
-.#...
-.....
-
 @iconBoltSmall 5 7
 ..##.
 .##..
@@ -173,4 +144,20 @@ tiny 6 .## #.. ### #.# ###
 tiny 7 ### ..# .#. .#. .#.
 tiny 8 ### #.# ### #.# ###
 tiny 9 ### #.# ### ..# ##.
-tiny ° ### #.# ### ... ...
+tiny ° .#. #.# .#. ... ...
+tiny W #.# #.# ### ### #.#
+tiny / ..# ..# .#. #.. #..
+@dogSegRing 4 4
+.##.
+#..#
+#..#
+.##.
+
+@dogHeatCheck 7 7
+......#
+.....##
+#...##.
+##.##..
+.###...
+..#....
+.......

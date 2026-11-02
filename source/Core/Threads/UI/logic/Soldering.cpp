@@ -12,12 +12,11 @@
 #define SCRATCH_SESSION_DONE 1 // state 6 bit: session bookkeeping done for this entry
 static TickType_t boostEndedAt = 0;
 
-// However it ended, boost goes back to the soldering screen, without the dog, also if it began before the set point was reached
+// However it ended, the time on the soldering screen runs from here on, also if boost began before the set point was reached
 static void boostFinished() {
   if (!dogSolderTimerStart) {
     dogSolderTimerStart = xTaskGetTickCount() | 1;
   }
-  dogWokeHeating = false;
 }
 
 static TickType_t boostStartedAt = 0; // 0 = no boost running
@@ -223,11 +222,9 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
       dogHeatupStartTempC = TipThermoModel::getTipInC();
       dogCurveReset();
       dogLotChangedAt = 0;
-      dogWokeHeating  = false;
       dogCountSession();
     } else {
-      dogWokeHeating = true; // heating back up to the solder: the dog runs up a fresh curve
-      dogCurveReset();
+      dogCurveReset(); // the samples before the sleep say nothing about now: a fresh sparkline and rate
     }
   }
   if (dogLockArmed && cxt->scratch_state.state1 < 2) {
@@ -265,9 +262,6 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
     if (!dogSolderTimerStart) {
       dogSolderTimerStart = xTaskGetTickCount() | 1; // never 0, that means "not started"
       dogReachedUntil     = xTaskGetTickCount() + TICKS_100MS * 2;
-    }
-    if (!cxt->scratch_state.state2) {
-      dogWokeHeating = false; // only the solder itself ends the dog's run, not reaching the boost target
     }
 #endif
     setStatusLED(LED_HOT);

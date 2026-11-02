@@ -42,16 +42,15 @@ extern const uint8_t dogZzz0[];
 extern const uint8_t dogZzz1[];
 extern const uint8_t dogZzz2[];
 extern const uint8_t dogHome[];
-extern const uint8_t iconSliders[];
-extern const uint8_t iconHomePlay[];
 extern const uint8_t dogTrot0[];
 extern const uint8_t dogTrot1[];
 extern const uint8_t dogTrot2[];
 extern const uint8_t dogTrot3[];
-extern const uint8_t iconTinyCheck[];
 extern const uint8_t iconBoltSmall[];
 extern const uint8_t dogTrendDown[];
 extern const uint8_t dogTrendUp[];
+extern const uint8_t dogSegRing[];
+extern const uint8_t dogHeatCheck[];
 extern const uint8_t *const dogZzz[DOG_ZZZ_STEPS];
 extern const uint8_t *const dogRun[DOG_RUN_FRAMES];
 
@@ -62,5 +61,8 @@ extern const uint8_t dogLabelFont[DOG_LABEL_GLYPHS * 5];
 
 // 3x5 labels of the home screen, 4 px advance, from art/home.txt
 extern const DogFont dogFontTiny;
+
+// The large digits of the soldering screen, 11x18
+extern const DogFont dogFontSeg;
 
 #endif // TS101_DOG_SPRITES_H_

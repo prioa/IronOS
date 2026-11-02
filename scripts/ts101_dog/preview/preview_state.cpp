@@ -47,7 +47,7 @@ TemperatureType_t TipThermoModel::getTipInC(bool) { return tipC; }
 TemperatureType_t TipThermoModel::getTipInF(bool) { return tipC * 9 / 5 + 32; }
 TemperatureType_t TipThermoModel::convertFtoC(TemperatureType_t f) { return (f - 32) * 5 / 9; }
 #ifndef BUTTON_TEST // from Buttons.cpp / SolderingCommon.cpp there
-TemperatureType_t getTipTemp(void) { return tipC; }
+TemperatureType_t getTipTemp(void) { return settings[SettingsOptions::TemperatureInF] ? tipC * 9 / 5 + 32 : tipC; }
 #endif
 uint16_t          getInputVoltageX10(uint16_t, uint8_t) { return vX10; }
 int16_t           getHandleTemperature(uint8_t) { return handleX10; }
@@ -129,38 +129,6 @@ void previewApply(const PreviewScene &s) {
   dogLastSessionSeconds                                                   = 27 * 60 + 12;
 }
 
-// The same simulated tip temperatures as the mock
-enum class Series { Steady, Dip, Drop, Heat, Boost, Set350, Load, Limited, Set240, Set335, Set370, Set400 };
-static void fillSeries(Series kind, uint32_t spacing = 250) {
-  dogCurveReset();
-  const uint32_t now = previewTicks;
-  for (int i = 0; i < 93; i++) {
-    int t = 320;
-    switch (kind) {
-    case Series::Set350: t = 350 + (i % 23 == 5 ? -1 : 0); break;
-    case Series::Set240: t = 240; break;
-    case Series::Set335: t = 335; break;
-    case Series::Set370: t = 370 + (i % 23 == 5 ? -1 : 0); break;
-    case Series::Set400: t = i < 60 ? 400 : 400 - (i - 60) % 8; break;
-    case Series::Load: { // the dip on the board: rows below the set line, by column
-      const int x = i * 78 / 93;
-      const int y = x < 57 ? 0 : x < 58 ? 1 : x < 59 ? 2 : x < 60 ? 3 : x < 61 ? 4 : x < 65 ? 5 : x < 67 ? 4 : x < 69 ? 3 : x < 73 ? 2 : 1;
-      t = 350 - y * 45 / 7;
-      break;
-    }
-    case Series::Limited: t = 49 + i * 119 / 92; break;
-    case Series::Steady: t = 320 + (i % 17 == 0 ? 1 : 0); break;
-    case Series::Dip: t = (i < 40 || i >= 60) ? 320 : (i < 46 ? 320 - (i - 40) * 5 : 290 + (i - 46) * 2); break;
-    case Series::Drop: t = i < 52 ? 320 : (320 - (i - 52) * 4 > 288 ? 320 - (i - 52) * 4 : 288); break;
-    case Series::Heat: t = 25 + i * 155 / 92; break;
-    case Series::Boost: t = i < 40 ? 320 : (320 + (i - 40) * 4 < 410 ? 320 + (i - 40) * 4 : 410); break;
-    }
-    previewTicks = now - (92 - i) * spacing;
-    dogCurveSample(t, spacing);
-  }
-  previewTicks = now;
-}
-
 // The set point was reached this many seconds ago
 static void atTemp(uint32_t seconds) { dogSolderTimerStart = (previewTicks - seconds * 1000 - 1) | 1; }
 
@@ -206,52 +174,71 @@ static void setAccel(int16_t x, int16_t y, int16_t z) {
   dogAccelRaw[2] = z;
 }
 
-// The iron has lain still for a moment: the dog at rest, before its first blink. gravity 1 g = 8000
-static void calm() {
+// Leaves the filter settled on this reading, at the scene's time. The iron's angle in degrees: positive = tip end down; gravity 1 g = 8000
+static void setAngle(int degrees) {
+  const double a = degrees * 3.14159265 / 180;
+  setAccel((int16_t)(8000 * sin(a)), (int16_t)(-8000 * cos(a)), 0);
+}
+
+// frames of the dog at 8 a second, the last at the scene's time
+static void runFrames(int frames) {
   const uint32_t end = previewTicks;
-  dogHomeMotionReset();
-  setAccel(0, -8000, 0);
-  for (int i = 8; i >= 0; i--) {
+  for (int i = frames - 1; i >= 0; i--) {
     previewTicks = end - i * 125;
     dogHomeMotionUpdate();
   }
 }
 
-// Still long enough for the first blink to be under way
-static void aboutToBlink() {
+static void holdAtAngle(int degrees) {
   const uint32_t end = previewTicks;
-  previewTicks       = end - 3100;
+  previewTicks       = end - 40 * 125;
   dogHomeMotionReset();
-  setAccel(0, -8000, 0);
-  for (int i = 0; previewTicks < end; i++) {
+  setAngle(degrees);
+  dogHomeMotionUpdate();
+  previewTicks = end;
+  runFrames(40);
+}
+
+static void calm() { holdAtAngle(0); }
+
+// Level, then held at this angle for this many frames
+static void turnedFor(int degrees, int frames) {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - frames * 125;
+  calm();
+  previewTicks = end;
+  setAngle(degrees);
+  runFrames(frames);
+}
+
+// Level, then shaken for this many frames, then calm for this many
+static void shakenFor(int frames, int calmFrames = 0) {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - (frames + calmFrames) * 125;
+  calm();
+  const uint32_t shakeEnd = end - calmFrames * 125;
+  for (int i = frames - 1; i >= 0; i--) {
+    previewTicks = shakeEnd - i * 125;
+    setAccel(0, (frames - 1 - i) % 2 ? -3000 : -16000, 0); // at the end of the shake too, the time it holds is the firmware's business
     dogHomeMotionUpdate();
-    previewTicks += 125;
   }
-  previewTicks = end;
-  dogHomeMotionUpdate();
-}
-
-// Calm, then picked up: a clear change of the reading, far from a shake
-static void pickedUp() {
-  const uint32_t end = previewTicks;
-  previewTicks       = end - 125;
-  calm();
-  previewTicks = end;
-  setAccel(2800, -7500, 0);
-  dogHomeMotionUpdate();
-}
-
-// Calm, then one strong reading; frame 1-4 of the hop
-static void shaken(int frame) {
-  const uint32_t end = previewTicks;
-  previewTicks       = end - frame * 125;
-  calm();
-  setAccel(0, -16000, 0);
-  for (int i = frame - 1; i >= 0; i--) {
+  setAngle(0);
+  for (int i = calmFrames - 1; i >= 0; i--) {
     previewTicks = end - i * 125;
     dogHomeMotionUpdate();
-    setAccel(0, -8000, 0);
   }
+  previewTicks = end;
+}
+
+// Level and alone until the next idle moment: frames counted so that the blink or the tongue is showing
+static void idleFor(int extraFrames, int firstAt = 52) {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - (firstAt + extraFrames) * 125;
+  dogHomeMotionReset();
+  setAngle(0);
+  dogHomeMotionUpdate();
+  previewTicks = end;
+  runFrames(firstAt + extraFrames);
 }
 
 static void home() {
@@ -270,62 +257,43 @@ static void homeStatistics(uint16_t minutesTotal, uint16_t counts, uint16_t sess
 }
 
 
-// Heating from 25 C at 4 samples a second up to this temperature; frame picks the legs' phase
-static void heatingScene(uint16_t now, int32_t x10W, int frame) {
-  limitX10 = 650;
+// The tip's way to the scene's time: each step is a target temperature and how many samples of 0.2 s it takes to get there
+struct CurveStep {
+  int temp, samples;
+};
+static void curve(int start, std::initializer_list<CurveStep> steps) {
+  int total = 0;
+  for (const CurveStep &s : steps) {
+    total += s.samples;
+  }
+  const uint32_t end = previewTicks;
+  int            at  = 0, from = start;
   dogCurveReset();
-  const uint32_t end   = previewTicks;
-  const int      count = (now - 25) / 7 + 1; // ~28 C a second at 65 W
-  for (int i = 0; i < count; i++) {
-    previewTicks = end - (count - 1 - i) * 250;
-    dogCurveSample(25 + (now - 25) * i / (count > 1 ? count - 1 : 1), 250);
+  previewTicks = end - total * 200;
+  dogCurveSample(start, 200);
+  for (const CurveStep &s : steps) {
+    for (int i = 1; i <= s.samples; i++) {
+      at++;
+      previewTicks = end - (total - at) * 200;
+      dogCurveSample(from + (s.temp - from) * i / s.samples, 200);
+    }
+    from = s.temp;
   }
   previewTicks = end;
-  x10WattHistory.sum = x10W;
-  // the legs run on the time: step through the frames at the scene's power
-  const uint32_t fps = x10W * 20 / 650 ? x10W * 20 / 650 : 1;
-  for (int i = 0; i <= frame; i++) {
-    previewTicks = end - (frame - i) * (1000 / fps);
-    ui_draw_soldering_basic_status(false);
-    OLED::clearScreen();
-  }
-  previewTicks = end;
-  ui_draw_soldering_basic_status(false);
 }
 
-// At temperature; changedMs ago a click changed the solder (0: none)
-static void solderScene(uint16_t tip, uint16_t set, Series kind, uint32_t changedMs) {
-  limitX10 = 650;
-  const uint32_t end = previewTicks;
-  previewTicks       = end - changedMs;
-  fillSeries(kind);
-  for (uint32_t t = 250; t <= changedMs; t += 250) { // after the change the tip is on its way
-    previewTicks = end - changedMs + t;
-    dogCurveSample(tip, 250);
-  }
-  previewTicks = end;
-  atTemp(199);
+// The screen with the solder last changed this long ago (0: not at all) and the set point reached this long ago (0: not yet)
+static void solderShot(uint32_t changedMs, uint32_t reachedS) {
   dogLotChangedAt = changedMs ? (previewTicks - changedMs) | 1 : 0;
+  if (reachedS) {
+    atTemp(reachedS);
+  }
   ui_draw_soldering_basic_status(false);
 }
 
-// A weak supply: the curve is full long before the set point. Rises from 25 C to this temperature over 93 samples
-static void slowHeatScene(uint16_t now, int frame) {
-  limitX10 = 300;
-  dogCurveReset();
-  const uint32_t end = previewTicks;
-  for (int i = 0; i < 93; i++) {
-    previewTicks = end - (92 - i) * 250;
-    dogCurveSample(25 + (now - 25) * i / 92, 250);
-  }
-  x10WattHistory.sum = 300;
-  for (int i = 0; i <= frame; i++) { // the legs run on the time
-    previewTicks = end - (frame - i) * 110;
-    ui_draw_soldering_basic_status(false);
-    OLED::clearScreen();
-  }
-  previewTicks = end;
-  ui_draw_soldering_basic_status(false);
+static void heating170() {
+  curve(26, {{170, 16}}); // 9 C in a sample of 0.2 s: 45 C a second
+  solderShot(0, 0);
 }
 
 static void boostScene(uint8_t secondsLeft) {
@@ -342,43 +310,69 @@ std::vector<PreviewScene> previewScenes() {
       // The home screen: H0 is on the statistics' first phase, each phase lasts 2 s
 #define H0 6000000
       {"h1_ruhig", H0, 26, 350, 0, 201, false, [] { home(); }},
-      {"h2_blinzelt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); aboutToBlink(); ui_draw_homescreen_simplified(26); }},
-      {"h3_aufmerksam", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); pickedUp(); ui_draw_homescreen_simplified(26); }},
-      {"h3_aufmerksam_gedreht", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); pickedUp(); ui_draw_homescreen_simplified(26); }},
-      {"h4_hopser_1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(1); ui_draw_homescreen_simplified(26); }},
-      {"h4_hopser_2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(2); ui_draw_homescreen_simplified(26); }},
-      {"h4_hopser_3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(3); ui_draw_homescreen_simplified(26); }},
-      {"h4_hopser_4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shaken(4); ui_draw_homescreen_simplified(26); }},
+      {"h2_links10", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(-10); ui_draw_homescreen_simplified(26); }},
+      {"h2_links20", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(-20); ui_draw_homescreen_simplified(26); }},
+      {"h2_links30", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(-30); ui_draw_homescreen_simplified(26); }},
+      {"h3_rechts10", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(10); ui_draw_homescreen_simplified(26); }},
+      {"h3_rechts20", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(20); ui_draw_homescreen_simplified(26); }},
+      {"h3_rechts30", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(30); ui_draw_homescreen_simplified(26); }},
+      {"h4_spitze_unten", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAtAngle(60); ui_draw_homescreen_simplified(26); }},
+      {"h6_umgedreht_links10", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); holdAtAngle(10); ui_draw_homescreen_simplified(26); }},
+      {"h6_umgedreht_links20", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); holdAtAngle(20); ui_draw_homescreen_simplified(26); }},
+      {"h6_umgedreht_links30", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); holdAtAngle(30); ui_draw_homescreen_simplified(26); }},
+      {"h6_umgedreht_rechts10", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); holdAtAngle(-10); ui_draw_homescreen_simplified(26); }},
+      {"h6_umgedreht_rechts20", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); holdAtAngle(-20); ui_draw_homescreen_simplified(26); }},
+      {"h6_umgedreht_rechts30", H0, 26, 350, 0, 201, false, [] { orient(false); feedHistory(HomeCurve::Cold, 26); holdAtAngle(-30); ui_draw_homescreen_simplified(26); }},
+      {"h5_geschuettelt_1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(1); ui_draw_homescreen_simplified(26); }},
+      {"h5_geschuettelt_2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(2); ui_draw_homescreen_simplified(26); }},
+      {"h5_geschuettelt_3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(3); ui_draw_homescreen_simplified(26); }},
+      {"h5_geschuettelt_4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(4); ui_draw_homescreen_simplified(26); }},
+      {"h7_nach_schuetteln_1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(4, 3); ui_draw_homescreen_simplified(26); }},
+      {"h7_nach_schuetteln_2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(4, 4); ui_draw_homescreen_simplified(26); }},
+      {"h7_nach_schuetteln_3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(4, 5); ui_draw_homescreen_simplified(26); }},
+      {"h7_nach_schuetteln_4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(4, 6); ui_draw_homescreen_simplified(26); }},
+      {"h7_nach_schuetteln_5", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); shakenFor(4, 7); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 1); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 2); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 3); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 4); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild5", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 5); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild6", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 6); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild7", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 7); ui_draw_homescreen_simplified(26); }},
+      {"h3a_rechts_bild8", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(20, 8); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild1", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 1); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 2); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild3", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 3); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild4", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 4); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild5", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 5); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild6", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 6); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild7", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 7); ui_draw_homescreen_simplified(26); }},
+      {"h2a_links_bild8", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); turnedFor(-20, 8); ui_draw_homescreen_simplified(26); }},
+      {"h8a_blinzelt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); idleFor(0); ui_draw_homescreen_simplified(26); }},
+      {"h8b_blinzelt_2", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); idleFor(1); ui_draw_homescreen_simplified(26); }},
+      {"h8c_zunge", H0, 80, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 80); idleFor(3, 24); ui_draw_homescreen_simplified(80); }},
       {"h10_hinten_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(false, 100); ui_draw_homescreen_simplified(26); }},
       {"h10_vorne_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
-      // Heating up, the first time to the set point: the dog runs up the curve, its legs as fast as the power allows
-      {"k1_heizt_65w", T, 120, 350, 650, 201, false, [] { heatingScene(120, 650, 0); }},
-      {"k1_heizt_65w_bild1", T + 50, 120, 350, 650, 201, false, [] { heatingScene(120, 650, 1); }},
-      {"k1_heizt_65w_bild2", T + 100, 120, 350, 650, 201, false, [] { heatingScene(120, 650, 2); }},
-      {"k1_heizt_65w_bild3", T + 150, 120, 350, 650, 201, false, [] { heatingScene(120, 650, 3); }},
-      {"k2_heizt_start", T, 41, 350, 650, 201, false, [] { heatingScene(41, 650, 0); }},
-      {"k3_heizt_fast_da", T, 338, 350, 210, 201, false, [] { heatingScene(338, 210, 0); }},
-      {"k4_heizt_gedreht", T, 205, 350, 650, 201, false, [] { orient(false); heatingScene(205, 650, 0); }},
-      {"k6_lang_mitte", T, 200, 350, 300, 201, false, [] { slowHeatScene(200, 0); }},
-      {"k6_lang_mitte_bild1", T, 200, 350, 300, 201, false, [] { slowHeatScene(200, 1); }},
-      {"k7_lang_fast_da", T, 338, 350, 300, 201, false, [] { slowHeatScene(338, 0); }},
-      {"k7_lang_fast_da_bild1", T, 338, 350, 300, 201, false, [] { slowHeatScene(338, 1); }},
-      {"k8_lang_gedreht", T, 338, 350, 300, 201, false, [] { orient(false); slowHeatScene(338, 0); }},
-      {"k9_kurz_am_ziel", T, 340, 350, 650, 201, false, [] { heatingScene(340, 650, 0); }},
-      {"k9_kurz_am_ziel_100w", T, 340, 350, 1000, 201, false, [] { heatingScene(340, 1000, 0); }},
-      {"k5_heizt_plus_gedrueckt", T, 205, 350, 650, 201, false, [] { pressed(true, 100); heatingScene(205, 650, 0); }},
-      // Soldering: no dog, the solder's name, clicks change it at once
-      {"l1_bereit_350", T, 350, 350, 90, 201, false, [] { solderScene(350, 350, Series::Set350, 0); }},
-      {"l2_plus_370_heizt", T, 352, 370, 650, 201, false, [] { solderScene(352, 370, Series::Set350, 300); }},
-      {"l3_bereit_370", T, 370, 370, 120, 201, false, [] { solderScene(370, 370, Series::Set370, 0); }},
-      {"l4_minus_350_kuehlt", T, 368, 350, 0, 201, false, [] { solderScene(368, 350, Series::Set370, 400); }},
-      {"l5_platine_bleifrei_heizt", T, 341, 350, 650, 201, false, [] { solderScene(341, 350, Series::Load, 0); }},
-      {"l6_platine_bleifrei_wechsel", T, 341, 350, 650, 201, false, [] { solderScene(341, 350, Series::Load, 500); }},
-      {"l7_empfindlich_wechsel", T, 240, 240, 60, 201, false, [] { solderScene(240, 240, Series::Set240, 900); }},
-      {"l8_kabel_masse", T, 400, 400, 200, 201, false, [] { solderScene(400, 400, Series::Set400, 0); }},
-      {"l9_manuell_335", T, 335, 335, 80, 201, false, [] { solderScene(335, 335, Series::Set335, 0); }},
-      {"l10_gedreht", T, 350, 350, 90, 201, false, [] { orient(false); solderScene(350, 350, Series::Set350, 0); }},
-      {"l11_minus_gedrueckt", T, 350, 350, 90, 201, false, [] { pressed(false, 100); solderScene(350, 350, Series::Set350, 0); }},
+      // Soldering: one screen, heating, cooling or ready
+      {"n1_aufheizen_170", T, 170, 350, 650, 201, false, [] { heating170(); }},
+      {"n1_aufheizen_170_wippt", T + 500, 170, 350, 650, 201, false, [] { heating170(); }},
+      {"n2_kurz_vor_ziel", T, 338, 350, 280, 201, false, [] { curve(26, {{320, 16}, {338, 15}}); solderShot(0, 0); }},
+      {"n3_bereit", T, 351, 350, 180, 201, false, [] { curve(26, {{350, 18}, {350, 39}}); solderShot(0, 38); }},
+      {"n4_lotwechsel", T, 358, 370, 650, 201, false, [] { curve(26, {{350, 18}, {350, 36}, {358, 3}}); solderShot(600, 45); }},
+      {"n4b_lotwechsel_vorbei", T, 370, 370, 200, 201, false, [] { curve(26, {{350, 18}, {350, 30}, {370, 9}}); solderShot(2100, 45); }},
+      {"n5_abkuehlen", T, 345, 320, 0, 201, false, [] { curve(26, {{350, 18}, {350, 30}, {345, 4}}); solderShot(800, 45); }},
+      {"n6_umgedreht", T, 170, 350, 650, 201, false, [] { orient(false); heating170(); }},
+      {"n6b_umgedreht_bereit", T, 351, 350, 180, 201, false, [] { orient(false); curve(26, {{350, 18}, {350, 39}}); solderShot(0, 38); }},
+      {"n7_start", T, 26, 350, 650, 201, false, [] { curve(26, {}); solderShot(0, 0); }},
+      {"n7b_keine_schaetzung", T, 200, 350, 650, 201, false, [] { curve(190, {{200, 8}, {200, 8}}); solderShot(0, 0); }},
+      {"n8_snbi_bereit", T, 240, 240, 60, 201, false, [] { curve(240, {{240, 56}}); solderShot(0, 75); }},
+      {"n8b_bleifrei_markiert", T, 350, 350, 180, 201, false, [] { curve(350, {{350, 56}}); solderShot(500, 75); }},
+      {"n8c_masse_lange", T, 400, 400, 200, 201, false, [] { curve(400, {{400, 56}}); solderShot(0, 754); }},
+      {"n8d_eigen", T, 335, 335, 90, 201, false, [] { curve(335, {{335, 56}}); solderShot(0, 75); }},
+      {"n9_alles_breit", T, 100, 400, 1000, 201, false, [] { curve(26, {{100, 1}}); solderShot(0, 0); }},
+      {"n9b_lange_zeit", T, 400, 400, 1000, 201, false, [] { curve(400, {{430, 28}, {400, 28}}); solderShot(0, 7425); }},
+      {"n9c_ziffer_9", T, 199, 350, 650, 201, false, [] { heating170(); }},
+      {"n10_fahrenheit", T, 170, 660, 650, 201, false, [] { settings[SettingsOptions::TemperatureInF] = 1; currentTempTargetDegC = 349; heating170(); settings[SettingsOptions::TemperatureInF] = 0; }},
       // Boost: the dog sprints, the ground runs to the left
       {"b1_boost", 209000, 400, 350, 650, 201, false, [] { boostScene(23); }},
       {"b1_boost_bild1", 209025, 400, 350, 650, 201, false, [] { boostScene(23); }},
@@ -387,9 +381,10 @@ std::vector<PreviewScene> previewScenes() {
       {"b2_boost_gedreht", 209000, 400, 350, 650, 201, false, [] { orient(false); boostScene(23); }},
       {"h6_umgedreht", H0, 26, 350, 0, 201, false, [] { orient(false); home(); }},
       {"h8_gesamt_max", H0, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
-      {"h8_aktuell_38", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 38); }},
-      {"h8_aktuell_999", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
-      {"h8_aktuell_max", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 59940); }},
+      {"h8_seit_start_38", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 38); }},
+      {"h8_seit_start_100", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 100); }},
+      {"h8_seit_start_999", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
+      {"h8_seit_start_max", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 59940); }},
       {"h8_vorgaenge_9999", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 9999, 999); }},
       {"h8_vorgaenge_max", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
       {"h8_boosts_max", H0 + 6000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},

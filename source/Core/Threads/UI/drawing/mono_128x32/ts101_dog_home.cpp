@@ -1,21 +1,25 @@
 /*
- * TS101_DOG_UI: the home screen. The dog on one side and the button pair next to the buttons; between them the statistics
+ * TS101_DOG_UI: the home screen. The dog's head on one side and the button pair next to the buttons; between them the statistics
  * and the temperature curve of the last 10 minutes. Held the other way round the blocks swap sides, nothing is mirrored.
  *
- * The dog is never deformed: it sits with its head relaxed and blinks now and then, looks up with its ears raised when the iron
- * is moved and hops when it is shaken. Only how strongly the reading changes counts, so no sensor axis has to be known.
+ * Tilt is one axis in the plane of the screen: the angle of the iron's long axis to the horizon. That is 0 both lying flat on
+ * the table and held level with the screen towards you, which an angle from two axes of the screen would not be.
  */
 #include "ts101_dog_ui.hpp"
 #ifdef TS101_DOG_UI
 #include "OLED.hpp"
 #include "Settings.h"
 #include "TipThermoModel.h"
+#include "ts101_dog_home_assets.h"
 #include "ui_drawing.hpp"
 #include <string.h>
 
-// To tune on the iron: how much change counts as moved, in sixteenths of gravity, and how strong a reading counts as a shake
-#define DOG_MOVED_SIXTEENTHS 2
-#define DOG_SHAKE_X10        16
+// The sensor axis along the iron and the sign that makes "tip down" positive, derived from the drivers and not yet checked on
+// the hardware. Tip up shows the "tip down" pose: change DOG_ACCEL_ALONG_SIGN. Only the head turns the wrong way: change DOG_ROLL_SIGN.
+#define DOG_ACCEL_ALONG      0
+#define DOG_ACCEL_ALONG_SIGN (+1)
+#define DOG_ROLL_SIGN        (+1)
+#define DOG_SHAKE_X10        16 // a shake: the reading this many tenths of gravity at rest, to tune on the iron
 
 volatile int16_t dogAccelRaw[3] = {0, 0, 0};
 
@@ -90,28 +94,39 @@ void dogHomeTick() {
   }
 }
 
-// ---- Motion: 8 updates a second, integers only ----
+// ---- The dog: 8 frames a second, integers only ----
 #define MOTION_TICKS  (TICKS_SECOND / 8)
-#define ALERT_HOLD    (TICKS_SECOND * 3 / 2) // it stays alert at least this long, so that it does not flicker
-#define HOP_PAUSE     TICKS_SECOND           // between two hops
-#define BLINK_TICKS   (TICKS_100MS * 2)
-#define DOG_HOME_SIZE 32
-#define HEAD_ROWS     14 // rows 0-13 are the head
+#define SHAKE_HOLD    (TICKS_SECOND / 2) // a shake is seen at 10 Hz at most: it counts as going on in between
+#define TIP_DOWN_ON   45
+#define TIP_DOWN_OFF  35
+#define COCK_FRAMES   5                  // after a shake
+#define BLINK_FRAMES  2
+#define TONGUE_FRAMES 6
+#define TONGUE_FROM_C 60                 // just soldered
+#define TONGUE_FIRST  24                 // frames on the home screen until it first shows, then
+#define TONGUE_GAP    160                // this many between two: 20 s
+#define GAZE_FRONT    2                  // the middle of the five steps
 
-static const int8_t  HOP_RISE[]    = {1, 2, 1}; // pixels off the ground, frame by frame
-static const uint8_t BLINK_GAPS[]  = {3, 5, 2, 6, 4}; // seconds between blinks, so that it does not look like a clock
-#define HOP_FRAMES ((uint8_t)sizeof(HOP_RISE))
+// The five steps of the gaze, left to right as the array runs. Both turned poses look the same way, the other side is them mirrored
+static const struct {
+  DogPose pose;
+  bool    mirrored;
+} GAZE[5] = {{DOG_POSE_TURN_RIGHT, true}, {DOG_POSE_TURN_LEFT, true}, {DOG_POSE_FRONT, false}, {DOG_POSE_TURN_LEFT, false}, {DOG_POSE_TURN_RIGHT, false}};
+
+// asin(i / 16) in degrees * 10
+static const uint16_t ASIN_X10[17] = {0, 36, 72, 108, 145, 182, 220, 259, 300, 342, 387, 434, 486, 543, 610, 696, 900};
+static const uint8_t  HOP_ROWS[4]  = {0, 1, 2, 1};
+static const uint8_t  IDLE_GAPS[5] = {52, 60, 48, 64, 56}; // frames until the next blink: 6-8 s, unevenly
 
 static int32_t    filtered[3];       // 16 = 1 raw count
 static uint32_t   restMagnitude = 0; // 16 = 1 raw count, 0 = not known yet
 static TickType_t motionLast    = 0;
-static TickType_t alertUntil    = 0;
-static TickType_t hopPauseUntil = 0;
-static TickType_t nextBlink     = 0;
-static TickType_t blinkUntil    = 0;
-static bool       motionStarted = false, alert = false, blinking = false, hopPause = false;
-static uint8_t    hopFrame      = 0; // 1-HOP_FRAMES while hopping, 0 otherwise
-static uint8_t    blinkIndex    = 0;
+static TickType_t shakeUntil    = 0;
+static bool       motionStarted = false, tipDown = false, shaking = false, poseMirrored = false, stepFrame = false;
+static uint8_t    gaze = GAZE_FRONT, gazeTarget = GAZE_FRONT; // steps of GAZE: where the head is, where it is going
+static uint8_t    cockFrames = 0, idleFrames = 0, idleGap = 0, tongueGap = 0, hopFrame = 0, hopRow = 0, idleCount = 0;
+static DogPose    idlePose   = DOG_POSE_BLINK;
+static DogPose    pose       = DOG_POSE_FRONT;
 
 static uint32_t squareRoot(uint32_t value) {
   uint32_t root = 0;
@@ -128,12 +143,108 @@ static uint32_t squareRoot(uint32_t value) {
 
 static uint32_t magnitude(int32_t x, int32_t y, int32_t z) { return squareRoot((uint32_t)(x * x) + (uint32_t)(y * y) + (uint32_t)(z * z)); }
 
-static inline bool reached(TickType_t now, TickType_t when) { return (int32_t)(now - when) >= 0; }
+static int16_t asinDeg(int32_t along, uint32_t length) {
+  const bool negative = along < 0;
+  uint32_t   ratio    = (uint32_t)(negative ? -along : along) * 256 / length; // 256 = 1
+  ratio               = ratio > 255 ? 255 : ratio;
+  const uint8_t  i    = ratio / 16;
+  const uint16_t x10  = ASIN_X10[i] + (ASIN_X10[i + 1] - ASIN_X10[i]) * (ratio % 16) / 16;
+  const int16_t  deg  = (x10 + 5) / 10;
+  return negative ? -deg : deg;
+}
 
 void dogHomeMotionReset() {
   restMagnitude = 0;
-  motionStarted = alert = blinking = hopPause = false;
-  hopFrame      = 0;
+  motionStarted = false;
+}
+
+// What the sensor says: shaking, tipDown and gazeTarget
+static void readLie(const int32_t raw[3], TickType_t now) {
+  // The sensor's scale differs between chips, so everything is relative to gravity as this one reports it
+  const uint32_t strength = magnitude(raw[0], raw[1], raw[2]);
+  if (strength == 0) {
+    shaking = tipDown = false; // no sensor, or it could not be read
+    gazeTarget        = GAZE_FRONT;
+    return;
+  }
+  if (!restMagnitude) {
+    restMagnitude = strength * 16;
+  }
+  if (strength * 160 > restMagnitude * DOG_SHAKE_X10) { // 16 * 10 against 10
+    shakeUntil = now + SHAKE_HOLD;
+  } else if ((int32_t)(now - shakeUntil) >= 0) {
+    restMagnitude += ((int32_t)(strength * 16) - (int32_t)restMagnitude) / 8;
+  }
+  shaking = (int32_t)(now - shakeUntil) < 0;
+  for (uint8_t i = 0; i < 3; i++) {
+    filtered[i] += (raw[i] * 16 - filtered[i]) * 3 / 10;
+  }
+  const uint32_t length = magnitude(filtered[0] / 16, filtered[1] / 16, filtered[2] / 16);
+  const int16_t  angle  = length ? asinDeg(DOG_ACCEL_ALONG_SIGN * filtered[DOG_ACCEL_ALONG] / 16, length) : 0; // positive: tip end down
+  tipDown               = angle >= TIP_DOWN_ON || (tipDown && angle >= TIP_DOWN_OFF);
+  // As the viewer sees it, positive with the left side down. The tip is on the right, or on the left held the other way round.
+  // round(clamp(-roll / 22, -1, 1) * 2): full at 22 degrees, a step changes at 5.5 and 16.5
+  const int16_t roll  = DOG_ROLL_SIGN * (normal() ? -angle : angle);
+  const int16_t size  = roll < 0 ? -roll : roll;
+  const uint8_t steps = size >= 17 ? 2 : (size * 2 + 11) / 22;
+  gazeTarget          = roll > 0 ? GAZE_FRONT - steps : GAZE_FRONT + steps; // against the tilt, towards you
+}
+
+// One frame of the pose: a shake before the tip before the gaze; alone in the middle, it blinks and pants
+static void nextPose() {
+  poseMirrored = false;
+  if (shaking) {
+    pose       = DOG_POSE_EARS_BACK;
+    hopRow     = HOP_ROWS[hopFrame];
+    hopFrame   = (hopFrame + 1) % 4;
+    cockFrames = COCK_FRAMES;
+    idleFrames = 0;
+    return; // the filter is no use during a shake: the head waits
+  }
+  hopFrame = hopRow = 0;
+  stepFrame         = !stepFrame;
+  if (stepFrame) { // every other frame at most one step: you see it turn
+    if (gaze < gazeTarget) {
+      gaze++;
+    } else if (gaze > gazeTarget) {
+      gaze--;
+    }
+  }
+  if (cockFrames) {
+    cockFrames--;
+    pose = DOG_POSE_COCK;
+    return;
+  }
+  if (tipDown) {
+    pose = DOG_POSE_UP;
+    return;
+  }
+  pose         = GAZE[gaze].pose;
+  poseMirrored = GAZE[gaze].mirrored;
+  if (gaze != GAZE_FRONT) {
+    idleFrames = 0;
+    return;
+  }
+  if (idleFrames) {
+    idleFrames--;
+    pose = idlePose;
+  } else if (!idleGap) {
+    idleCount++;
+    idleGap    = IDLE_GAPS[idleCount % sizeof(IDLE_GAPS)];
+    idlePose   = DOG_POSE_BLINK;
+    idleFrames = BLINK_FRAMES - 1;
+    pose       = idlePose;
+  } else if (!tongueGap && TipThermoModel::getTipInC() > TONGUE_FROM_C) { // hot from soldering
+    tongueGap  = TONGUE_GAP;
+    idlePose   = DOG_POSE_TONGUE;
+    idleFrames = TONGUE_FRAMES - 1;
+    pose       = idlePose;
+  } else {
+    idleGap--;
+    if (tongueGap) {
+      tongueGap--;
+    }
+  }
 }
 
 void dogHomeMotionUpdate() {
@@ -143,69 +254,30 @@ void dogHomeMotionUpdate() {
   }
   const int32_t raw[3] = {dogAccelRaw[0], dogAccelRaw[1], dogAccelRaw[2]};
   if (!motionStarted || now - motionLast > TICKS_SECOND) {
-    // First update here, or back from another screen: start from the present, no reaction to what happened elsewhere
+    // First update here, or back from another screen: start from the present instead of swinging over from the past
     for (uint8_t i = 0; i < 3; i++) {
       filtered[i] = raw[i] * 16;
     }
     motionStarted = true;
     motionLast    = now;
-    alert         = blinking = hopPause = false;
-    hopFrame      = 0;
-    nextBlink     = now + BLINK_GAPS[blinkIndex] * TICKS_SECOND;
+    shakeUntil    = now;
+    tipDown       = false;
+    cockFrames = idleFrames = hopFrame = hopRow = 0;
+    idleGap    = IDLE_GAPS[0];
+    tongueGap  = TONGUE_FIRST;
+    readLie(raw, now);
+    gaze = gazeTarget; // the head is already where it should be when the screen comes up
   } else {
     motionLast += MOTION_TICKS;
+    readLie(raw, now);
   }
-
-  // The sensor's scale differs between chips, so everything below is relative to gravity as this one reports it
-  const uint32_t strength = magnitude(raw[0], raw[1], raw[2]);
-  if (strength == 0) {
-    restMagnitude = 0; // no sensor, or it could not be read: it just sits and blinks
-  } else {
-    if (!restMagnitude) {
-      restMagnitude = strength * 16;
-    }
-    uint32_t change = 0; // 16 = 1 raw count
-    for (uint8_t i = 0; i < 3; i++) {
-      const int32_t difference = raw[i] * 16 - filtered[i];
-      change += difference < 0 ? -difference : difference;
-      filtered[i] += difference * 3 / 10;
-    }
-    const bool shaken = strength * 160 > restMagnitude * DOG_SHAKE_X10; // 16 * 10 against 10
-    if (change * 16 > restMagnitude * DOG_MOVED_SIXTEENTHS || shaken) {
-      alert      = true;
-      alertUntil = now + ALERT_HOLD;
-    } else if (alert && reached(now, alertUntil)) {
-      alert = false;
-    }
-    if (!shaken && !alert) {
-      restMagnitude += ((int32_t)(strength * 16) - (int32_t)restMagnitude) / 8;
-    }
-    if (hopPause && reached(now, hopPauseUntil)) {
-      hopPause = false;
-    }
-    if (hopFrame) {
-      if (++hopFrame > HOP_FRAMES) {
-        hopFrame      = 0;
-        hopPause      = true;
-        hopPauseUntil = now + HOP_PAUSE;
-      }
-    } else if (shaken && !hopPause) {
-      hopFrame = 1;
-    }
-  }
-
-  if (blinking && reached(now, blinkUntil)) {
-    blinking = false;
-  }
-  if (reached(now, nextBlink)) {
-    blinking   = !alert && !hopFrame; // looking up it does not blink, the next one comes in its time
-    blinkUntil = now + BLINK_TICKS;
-    blinkIndex = (blinkIndex + 1) % sizeof(BLINK_GAPS);
-    nextBlink  = now + BLINK_GAPS[blinkIndex] * TICKS_SECOND;
-  }
+  nextPose();
 }
 
-// ---- The dog: always the bitmap, moved as a whole or with its head as one block ----
+// ---- The dog on the sleep screen: the full figure, its lids and its head moved on its own ----
+#define DOG_HOME_SIZE 32
+#define HEAD_ROWS     14 // rows 0-13 are the head
+
 static inline bool dogPixel(uint8_t x, uint8_t y) { return (dogHome[(y / 8) * DOG_HOME_SIZE + x] >> (y % 8)) & 1; }
 
 static void plot(int16_t x, int16_t y) {
@@ -214,32 +286,36 @@ static void plot(int16_t x, int16_t y) {
   }
 }
 
-// rise lifts all of it, headDrop lowers the head on top of that; lids close the two eye gaps on row 7 and row 9
-static void drawPose(int16_t originX, uint8_t rise, uint8_t headDrop, bool lid7, bool lid9) {
+// Asleep: rows 7 and 9 of the two eye gaps filled, only row 8 stays open, and the head a pixel lower.
+// Waking: frame 1 opens row 9, frame 2 row 7, frame 3 lifts the head back up
+void dogDrawSleepingDog(int16_t originX, uint8_t wakeFrame) {
+  const uint8_t headDrop = wakeFrame < 3 ? 1 : 0;
   for (uint8_t y = 0; y < DOG_HOME_SIZE; y++) {
-    const bool lid = (y == 7 && lid7) || (y == 9 && lid9);
+    const bool lid = (y == 7 && wakeFrame < 2) || (y == 9 && wakeFrame < 1);
     for (uint8_t x = 0; x < DOG_HOME_SIZE; x++) {
       if (dogPixel(x, y) || (lid && (x == 6 || x == 9))) {
-        plot(originX + x, y - rise + (y < HEAD_ROWS ? headDrop : 0));
+        plot(originX + x, y + (y < HEAD_ROWS ? headDrop : 0));
       }
     }
   }
 }
 
-static void drawDog(int16_t originX) {
-  if (hopFrame) {
-    const uint8_t rise = HOP_RISE[hopFrame - 1];
-    drawPose(originX, rise, rise, false, false); // the head stays down a bit in the jump, so the ears are not cut off at the top
-  } else {
-    drawPose(originX, 0, alert ? 0 : 1, blinking, blinking);
+// A pose, the columns the other way round if mirrored; below the screen it is cut off
+static void drawPose(int16_t x, int8_t y) {
+  const uint8_t *data = dogPoses[pose];
+  for (uint8_t page = 0; page < DOG_POSE_SIZE / 8; page++) {
+    for (uint8_t col = 0; col < DOG_POSE_SIZE; col++) {
+      const uint8_t bits = data[page * DOG_POSE_SIZE + (poseMirrored ? DOG_POSE_SIZE - 1 - col : col)];
+      for (uint8_t bit = 0; bit < 8; bit++) {
+        if ((bits >> bit) & 1) {
+          plot(x + col, y + page * 8 + bit);
+        }
+      }
+    }
   }
 }
 
-// Asleep: rows 7 and 9 of the two eye gaps filled, only row 8 stays open, and the head a pixel lower.
-// Waking: frame 1 opens row 9, frame 2 row 7, frame 3 lifts the head back up
-void dogDrawSleepingDog(int16_t originX, uint8_t wakeFrame) { drawPose(originX, 0, wakeFrame < 3 ? 1 : 0, wakeFrame < 2, wakeFrame < 1); }
-
-// ---- The buttons: two boxes next to the buttons, so they change sides with the orientation ----
+// ---- The buttons: a frame x..x+31 on rows 17-31 with a box per button, next to the buttons, so it changes sides with the orientation ----
 static void outline(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
   OLED::drawFilledRect(x0, y0, x1, y0, false);
   OLED::drawFilledRect(x0, y1, x1, y1, false);
@@ -247,7 +323,7 @@ static void outline(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
   OLED::drawFilledRect(x1, y0, x1, y1, false);
 }
 
-// The box of one button, 15x15 on rows 17-31; the inside inverts while it is pressed
+// The box of one button, 15x15 on rows 17-31, for the soldering screens; the inside inverts while it is pressed
 void dogKeyBox(uint8_t x, bool front, const uint8_t *icon, uint8_t iconX, uint8_t iconY, uint8_t width, uint8_t height) {
   outline(x, 17, x + 14, 31);
   if (icon) {
@@ -268,57 +344,75 @@ void dogKeyPair(uint8_t x, const uint8_t *front, const uint8_t *rear) {
   const bool frontRight = dogFrontOnRight();
   for (uint8_t i = 0; i < 2; i++) {
     const bool isFront = (i == 1) == frontRight;
-    // The play triangle sits half a pixel right of the middle on purpose: its optical middle
-    dogKeyBox(x + 17 * i, isFront, isFront ? front : rear, isFront ? 5 : 2, isFront ? 2 : 4, isFront ? 6 : 11, isFront ? 16 : 8);
+    dogKeyBox(x + 17 * i, isFront, isFront ? front : rear, 2, 4, 11, 8);
   }
 }
 
-static void drawButtonPair() { dogKeyPair(normal() ? 96 : 0, iconHomePlay, iconSliders); }
+// Home: one frame, the rear button's box with the sliders, the front button's with the play triangle
+static void drawButtonPair(uint8_t x) {
+  outline(x, 17, x + 31, 31);
+  const bool frontRight = dogFrontOnRight();
+  for (uint8_t i = 0; i < 2; i++) {
+    const bool    isFront = (i == 1) == frontRight;
+    const uint8_t box     = x + 2 + 15 * i;
+    outline(box, 19, box + 12, 29);
+    if (isFront) {
+      dogBlit(box + 5, 21, 4, 8, iconHomePlay);
+    } else {
+      dogBlit(box + 2, 21, 9, 8, iconHomeSliders);
+    }
+    if (dogPressed(isFront)) {
+      OLED::invertRect(box + 1, 20, box + 11, 28);
+    }
+  }
+}
 
 // ---- Statistics ----
 #define STAT_TICKS (TICKS_SECOND * 2)
 
-static void formatCount(char *out, uint16_t value) {
-  if (value < 10000) {
-    dogFormat(out, value);
-  } else {
-    strcpy(dogFormat(out, value / 1000), "K"); // 5 digits don't fit behind VORGÄNGE
-  }
-}
-
-static void formatHours(char *out, uint16_t hours, uint16_t wideFrom) {
-  strcpy(dogFormat(out, hours), hours < wideFrom ? " H" : "H");
-}
-
+// The value in its long form, or the short one if the row would run past x=93 (92 turned, where the arrow starts)
 static void drawStatistics(int16_t x) {
-  char        value[8];
-  const char *label;
+  const uint16_t minutes = dogSessionMinutes;
+  const char    *label;
+  char           value[10], shortValue[8];
   switch ((xTaskGetTickCount() / STAT_TICKS) % 4) {
-  case 0:
-    label = DOG_T("GESAMT", "TOTAL");
-    formatHours(value, getSettingValue(SettingsOptions::TotalSolderMinutes) / 60, 1000);
+  case 0: {
+    const uint16_t hours = getSettingValue(SettingsOptions::TotalSolderMinutes) / 60;
+    label                = DOG_T("GESAMT", "TOTAL");
+    strcpy(dogFormat(value, hours), " H");
+    strcpy(dogFormat(shortValue, hours), "H");
     break;
+  }
   case 1:
-    label = DOG_T("AKTUELL", "START");
-    if (dogSessionMinutes < 100) {
-      strcpy(dogFormat(value, dogSessionMinutes), " M");
-    } else if (dogSessionMinutes < 1000) {
-      strcpy(dogFormat(value, dogSessionMinutes), "M");
+    label = DOG_T("SEIT START", "SESSION"); // since power on: the iron has no clock
+    if (minutes < 100) {
+      strcpy(dogFormat(value, minutes), " MIN");
+      strcpy(dogFormat(shortValue, minutes), "M");
     } else {
-      formatHours(value, dogSessionMinutes / 60, 100);
+      const uint16_t hours = minutes / 60;
+      strcpy(dogFormat(value, hours), " H");
+      strcpy(dogFormat(shortValue, hours), hours < 100 ? "H" : ""); // behind SEIT START there is room for three characters
     }
     break;
-  case 2:
-    label = DOG_T("VORGÄNGE", "RUNS");
-    formatCount(value, getSettingValue(SettingsOptions::TotalSolderSessions));
-    break;
-  default:
-    label = "BOOSTS";
-    dogFormat(value, getSettingValue(SettingsOptions::TotalBoosts));
+  case 2: {
+    const uint16_t runs = getSettingValue(SettingsOptions::TotalSolderSessions);
+    label               = DOG_T("VORGÄNGE", "RUNS");
+    dogFormat(value, runs);
+    strcpy(dogFormat(shortValue, runs / 1000), "K"); // 5 digits don't fit behind VORGÄNGE
     break;
   }
+  default: {
+    const uint16_t boosts = getSettingValue(SettingsOptions::TotalBoosts);
+    label                 = "BOOSTS";
+    dogFormat(value, boosts);
+    strcpy(dogFormat(shortValue, boosts / 1000), "K");
+    break;
+  }
+  }
   dogText(dogFontTiny, x, 8, label);
-  dogSmall(x + dogTextWidth(dogFontTiny, label) + 2, value, 8);
+  const int16_t valueX = x + dogTextWidth(dogFontTiny, label) + 2;
+  const int16_t limit  = x + (normal() && trendDirection ? 55 : 56); // a pixel of air before the arrow, when there is one
+  dogSmall(valueX, valueX + dogTextWidth(dogFontSmall, value) - 1 > limit ? shortValue : value, 8);
 }
 
 // ---- Temperature and trend ----
@@ -330,7 +424,7 @@ static void drawTemperature(int16_t right, uint16_t value, bool blank) {
   const uint8_t digits = strlen(text);
   const int16_t first  = right - (digits * BIG_PITCH - 1 + 2 + 5) + 1;
   if (trendDirection) {
-    dogBlit(first - 7, 3 + (xTaskGetTickCount() / (TICKS_SECOND / 2)) % 2, 5, 8, trendDirection > 0 ? dogTrendUp : dogTrendDown);
+    dogBlit(first - 7, 2 + (xTaskGetTickCount() / (TICKS_SECOND / 2)) % 2, 5, 8, trendDirection > 0 ? iconHomeArrowUp : iconHomeArrowDown);
   }
   if (blank) {
     return;
@@ -376,10 +470,10 @@ void dogDrawHome(uint16_t shownTemperature) {
   const int16_t  x0    = normal() ? 37 : 36;
 
   dogHomeMotionUpdate();
-  drawDog(normal() ? 2 : OLED_WIDTH - DOG_HOME_SIZE + 2);
+  drawPose(normal() ? 0 : OLED_WIDTH - DOG_POSE_SIZE, hopRow);
   drawStatistics(x0);
   drawTemperature(normal() ? OLED_WIDTH - 1 : 33, shownTemperature, blank);
   drawHistory(x0);
-  drawButtonPair();
+  drawButtonPair(normal() ? 96 : 0);
 }
 #endif

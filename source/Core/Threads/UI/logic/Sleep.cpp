@@ -9,6 +9,7 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
 #endif
   // Drop to sleep temperature and display until movement or button press
 #ifdef TS101_DOG_UI
+  dogSaveCounters(); // pulling the plug after this loses nothing
   // State 3 = the tick the wake frames started, 0 while asleep
   if (!cxt->scratch_state.state3) {
     dogSleepWakeFrame = 0;

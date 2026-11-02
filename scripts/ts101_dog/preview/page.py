@@ -7,9 +7,9 @@ rendered, boards, out = sys.argv[1:4]
 BOARDS = [
     ('Detail, stop, temperature, sleep', [('g_detail', 'Detail view', 'Menu switch DETAILANSICHT'), ('g_stopp', 'Stop, rear held', '')]),
 ]
-OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter', 'Start, cooling'), ('h2_blinzelt', 'Start, blinking'), ('h3_aufmerksam', 'Start, moved'), ('h4_hopser_2', 'Start, shaken'),
-         ('k1_heizt_65w', 'Heating at 65 W'), ('k3_heizt_fast_da', 'Heating, nearly there'), ('k4_heizt_gedreht', 'Heating, turned'), ('l1_bereit_350', 'Soldering, ready 350°'), ('l2_plus_370_heizt', 'After +: 370°, heating'),
-         ('l3_bereit_370', 'Ready 370°'), ('l4_minus_350_kuehlt', 'After −: cooling'), ('l5_platine_bleifrei_heizt', 'Longest name'), ('l10_gedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('s03_schlaf_z_2', 'Sleep'), ('s32_gedreht', 'Sleep, turned'), ('s22_wach_bild3', 'Sleep, waking'), ('r6_stopp_gedreht', 'Stop, turned'), 
+OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter', 'Start, cooling'), ('h2_links20', 'Start, tilted left'), ('h3_rechts20', 'Start, tilted right'), ('h4_spitze_unten', 'Start, tip down'), ('h5_geschuettelt_2', 'Start, shaken'), ('h7_nach_schuetteln_2', 'After the shake'), ('h8a_blinzelt', 'Blinking'), ('h8c_zunge', 'Tongue, tip hot'),
+         ('n1_aufheizen_170', 'Heating, 170°'), ('n2_kurz_vor_ziel', 'Heating, nearly there'), ('n3_bereit', 'Ready'), ('n4_lotwechsel', 'Right after a change of solder'),
+         ('n5_abkuehlen', 'Cooling to a colder solder'), ('n6_umgedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('s03_schlaf_z_2', 'Sleep'), ('s32_gedreht', 'Sleep, turned'), ('s22_wach_bild3', 'Sleep, waking'), ('r6_stopp_gedreht', 'Stop, turned'), 
          ('s4_druck', 'Front pressed'), ('s5_halten', 'Front held'), ('s31_aus_nach_aus', 'Sleep, auto-off disabled'),
          ('m00_oben', 'Menu, top of the list'), ('m02_ziel_aendern', 'Changing a number'), ('m05_anzeige', 'Display settings'), ('m09_werte_1', 'Readings'), ('m11_ende', 'End of the list'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
 TABLE = [('Start', 'Solder', 'Menu', 'Nothing', 'Nothing'), ('Soldering', 'One solder hotter', '*One solder colder', '*Boost, 30 s at most', '*Stop after 0.5 s'),
@@ -17,7 +17,7 @@ TABLE = [('Start', 'Solder', 'Menu', 'Nothing', 'Nothing'), ('Soldering', 'One s
 CHOICES = ['Lock: hold both buttons on Start to switch it on or off. The SPERRE menu entry must not be off. To unlock: both buttons stop, then the same gesture on Start.',
            'A set point that is no preset shows Soll on Start. Presets read SnBi, Bleilot, Bleifrei, SnCu, Masse.',
            'Clicks change the solder at once while soldering, no view in between, nothing at the ends. There is no Temperature view any more.',
-           'The dog runs only while heating up the first time and during boost; once the set point is reached it only comes back after sleep.']
+           'The dog runs only during boost.']
 
 def load(path, invert):
     img = Image.open(path).convert('L')
