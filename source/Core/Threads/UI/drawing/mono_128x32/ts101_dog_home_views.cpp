@@ -413,7 +413,10 @@ void dogIronPose(int32_t &tilt, int32_t &turn) {
   static int32_t shownTilt = 0, shownTurn = 0;
   int16_t        along = 0, about = 0;
   dogFastSensorUntil = xTaskGetTickCount() + TICKS_100MS * 3;
-  dogIronLie(along, about);
+  if (!dogIronLie(along, about) || !dogIronSteady) {
+    along = shownTilt; // moved hard: the iron stays where it was until the hand slows
+    about = normal() ? shownTurn : -shownTurn;
+  }
   int32_t targetTilt = along > IRON_TILT_MAX ? IRON_TILT_MAX : (along < -IRON_TILT_MAX ? -IRON_TILT_MAX : along);
   // Held the other way round, the side towards the viewer is the other one
   const int32_t targetTurn = normal() ? about : -about;

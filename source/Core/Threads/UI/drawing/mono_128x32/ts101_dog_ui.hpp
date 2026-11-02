@@ -112,6 +112,7 @@ void     dogDrawHomeView(uint8_t view, uint16_t shownTemperature);
 void     dogDrawHomeHead(int16_t x); // the dog's head as on the home screen, following the sensor
 void     dogDrawSmallIron();         // the small iron of the home screen, lying as the real one does
 int16_t  dogHomeRollDeg();           // the tilt as the viewer sees it, positive with the left side down
+extern bool dogIronSteady; // the newest reading is about gravity alone, not the hand's moving
 bool     dogIronLie(int16_t &along, int16_t &turn); // from the newest reading: the long axis (tip down +) and the turn about it (0 board up)
 bool     dogHomeTipDown();
 bool     dogHomeShaking();

@@ -510,12 +510,18 @@ static void drawHistory(int16_t x0) {
 int16_t  dogHomeRollDeg() { return rollDeg; }
 // The lie of the iron from the newest reading, without the dog's smoothing: the iron drawn on the screen follows at once.
 // along: the long axis against the horizon, tip down positive; turn: about the long axis, 0 board up, +-90 on its side
+bool dogIronSteady = true;
 bool dogIronLie(int16_t &along, int16_t &turn) {
   const int32_t  raw[3] = {dogAccelRaw[0], dogAccelRaw[1], dogAccelRaw[2]};
   const uint32_t length = magnitude(raw[0], raw[1], raw[2]);
   if (!length) {
     return false; // no sensor
   }
+  // Pulled by more or less than gravity: the hand moves it, the reading is not its lie
+  static uint32_t rest = 0;
+  rest                 = rest ? rest + ((int32_t)length - (int32_t)rest) / 16 : length;
+  const uint32_t off   = length > rest ? length - rest : rest - length;
+  dogIronSteady        = off * 8 < rest;
   along                 = asinDeg(DOG_ACCEL_ALONG_SIGN * raw[DOG_ACCEL_ALONG], length);
   const int32_t  across = raw[DOG_ACCEL_ACROSS], through = raw[DOG_ACCEL_NORMAL];
   const uint32_t side   = magnitude(across, through, 0);
