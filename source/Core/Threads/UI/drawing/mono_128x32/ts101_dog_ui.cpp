@@ -8,6 +8,7 @@ uint16_t   dogHeatupStartTempC = 0;
 TickType_t dogReachedUntil     = 0;
 TickType_t dogLotChangedAt     = 0;
 bool       dogWokeHeating      = false;
+bool       dogFastFrames       = false;
 uint8_t    dogSleepWakeFrame   = 0;
 uint32_t   dogLastSessionSeconds = 0;
 

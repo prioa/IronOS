@@ -121,6 +121,9 @@ void dogCountSolderTime();
 
 // Seconds of boost left, for the boost screen (set by Soldering.cpp)
 uint8_t dogBoostSecondsLeft();
+// The boost screen was drawn this frame: the GUI loop runs at 40 frames a second instead of 25, for the sprint's legs
+extern bool dogFastFrames;
+#define DOG_FAST_FRAME_TICKS (TICKS_SECOND / 40)
 // Button lock, switched on the home screen for the soldering sessions that follow
 extern bool dogLockArmed;
 // A setting changed while soldering: saved with the soldering time on the home screen, sparing the flash

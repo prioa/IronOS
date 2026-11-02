@@ -49,6 +49,7 @@ OperatingMode guiHandleDraw(void) {
 #ifdef TS101_DOG_UI
   buttons = dogButtonsPoll(buttons);
   dogHomeTick();
+  dogFastFrames = false; // the boost screen sets it again while it is drawn
 #endif
   // Enforce screen on if buttons pressed, movement, hot tip etc
   if (buttons != BUTTON_NONE) {
@@ -254,6 +255,10 @@ void startGUITask(void const *argument) {
   for (;;) {
     guiRenderLoop();
     resetWatchdog();
+#ifdef TS101_DOG_UI
+    vTaskDelayUntil(&startRender, dogFastFrames ? DOG_FAST_FRAME_TICKS : TICKS_100MS * 4 / 10); // 40 fps for the boost sprint, else 25
+#else
     vTaskDelayUntil(&startRender, TICKS_100MS * 4 / 10); // Try and maintain 20-25fps ish update rate, way to fast but if we can its nice
+#endif
   }
 }

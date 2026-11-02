@@ -153,6 +153,7 @@ static uint16_t setPoint() { return getSettingValue(SettingsOptions::SolderingTe
  *   - - - - - - - - - - - - - - - -  (the ground runs to the left)
  */
 static void drawBoostScreen() {
+  dogFastFrames    = true;
   const int16_t x0 = stageX();
   dogBlit(x0 + 2, 1, 5, 8, iconBoltSmall);
   dogSmall(x0 + 9, "BOOST", 8);
