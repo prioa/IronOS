@@ -138,6 +138,8 @@ void dogCountSolderTime();
 uint8_t dogBoostSecondsLeft();
 // The boost screen was drawn this frame: the GUI loop runs at 40 frames a second instead of 25, for the sprint's legs
 extern bool dogFastFrames;
+// Until this tick an iron is drawn from the sensor: MOVThread reads it every 40 ms instead of 100
+extern volatile TickType_t dogFastSensorUntil;
 #define DOG_FAST_FRAME_TICKS (TICKS_SECOND / 40)
 // Button lock, switched on the home screen for the soldering sessions that follow
 extern bool dogLockArmed;

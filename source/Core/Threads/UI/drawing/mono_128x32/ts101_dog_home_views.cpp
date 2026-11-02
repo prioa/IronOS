@@ -406,20 +406,25 @@ static IronMarks drawIronIn(const IronBox &box, int32_t tilt, int32_t turn, bool
   return marks;
 }
 
-// What the sensor says: the tilt of the long axis and the turn about it, both as the viewer sees them. The sensor is read 10 times a
-// second; halfway to each new reading per frame (25 a second), so the iron follows within a tenth of a second without jumping
+// What the sensor says: the tilt of the long axis and the turn about it, both as the viewer sees them. No smoothing, the iron
+// follows the newest reading at once; changes under 2 degrees are left out so it does not tremble when the iron lies still.
+// While an iron is on the screen the sensor is read 25 times a second instead of 10 (MOVThread)
 void dogIronPose(int32_t &tilt, int32_t &turn) {
   static int32_t shownTilt = 0, shownTurn = 0;
   int16_t        along = 0, about = 0;
+  dogFastSensorUntil = xTaskGetTickCount() + TICKS_100MS * 3;
   dogIronLie(along, about);
   int32_t targetTilt = along > IRON_TILT_MAX ? IRON_TILT_MAX : (along < -IRON_TILT_MAX ? -IRON_TILT_MAX : along);
   // Held the other way round, the side towards the viewer is the other one
   const int32_t targetTurn = normal() ? about : -about;
   int32_t       turnStep   = targetTurn - shownTurn;
   turnStep                 = turnStep > 180 ? turnStep - 360 : (turnStep < -180 ? turnStep + 360 : turnStep); // the short way round
-  auto half = [](int32_t difference) { return difference / 2 ? difference / 2 : difference; }; // the last degree at once
-  shownTilt += half(targetTilt - shownTilt);
-  shownTurn += half(turnStep);
+  if (targetTilt - shownTilt > 1 || shownTilt - targetTilt > 1) {
+    shownTilt = targetTilt;
+  }
+  if (turnStep > 1 || turnStep < -1) {
+    shownTurn += turnStep;
+  }
   shownTurn = shownTurn > 180 ? shownTurn - 360 : (shownTurn < -180 ? shownTurn + 360 : shownTurn);
   tilt      = shownTilt;
   turn      = shownTurn;

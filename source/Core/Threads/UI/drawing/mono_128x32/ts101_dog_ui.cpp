@@ -9,6 +9,7 @@ TickType_t dogReachedUntil     = 0;
 TickType_t dogLotChangedAt     = 0;
 bool       dogWokeHeating      = false;
 bool       dogFastFrames       = false;
+volatile TickType_t dogFastSensorUntil = 0;
 uint8_t    dogSleepWakeFrame   = 0;
 uint32_t   dogLastSessionSeconds = 0;
 

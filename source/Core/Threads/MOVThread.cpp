@@ -237,6 +237,10 @@ void startMOVTask(void const *argument __unused) {
 
 #endif
 
+#ifdef TS101_DOG_UI
+    vTaskDelay((int32_t)(dogFastSensorUntil - xTaskGetTickCount()) > 0 ? TICKS_100MS * 4 / 10 : TICKS_100MS); // an iron drawn from the sensor wants it often
+#else
     vTaskDelay(TICKS_100MS); // Slow down update rate
+#endif
   }
 }
