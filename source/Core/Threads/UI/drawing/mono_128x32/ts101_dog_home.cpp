@@ -130,7 +130,7 @@ static TickType_t shakeUntil    = 0;
 static bool       motionStarted = false, tipDown = false, shaking = false, poseMirrored = false, stepFrame = false;
 static uint8_t    gaze = GAZE_FRONT, gazeTarget = GAZE_FRONT; // steps of GAZE: where the head is, where it is going
 static int16_t    rollDeg = 0;                                // the tilt as the viewer sees it, positive with the left side down
-static int16_t    alongDeg = 0, turnDeg = 0;                  // the long axis against the horizon (tip down +), the turn about it
+static int16_t    alongDeg = 0;                               // the long axis against the horizon, tip down positive
 static uint8_t    cockFrames = 0, idleFrames = 0, idleGap = 0, tongueGap = 0, hopFrame = 0, hopRow = 0, idleCount = 0;
 static DogPose    idlePose   = DOG_POSE_BLINK;
 static DogPose    pose       = DOG_POSE_FRONT;
@@ -191,13 +191,6 @@ static void readLie(const int32_t raw[3], TickType_t now) {
   const int16_t  angle  = length ? asinDeg(DOG_ACCEL_ALONG_SIGN * filtered[DOG_ACCEL_ALONG] / 16, length) : 0; // positive: tip end down
   tipDown               = angle >= TIP_DOWN_ON || (tipDown && angle >= TIP_DOWN_OFF);
   alongDeg              = angle;
-  // The turn about the long axis: 0 with the board facing up, +-90 on its side, from the two axes across the iron
-  const int32_t across = filtered[DOG_ACCEL_ACROSS] / 16, through = filtered[DOG_ACCEL_NORMAL] / 16;
-  const uint32_t side   = magnitude(across, through, 0);
-  if (side) {
-    const int16_t a = asinDeg(across, side);
-    turnDeg         = DOG_ACCEL_TURN_SIGN * (through >= 0 ? a : (a >= 0 ? 180 - a : -180 - a));
-  }
   // As the viewer sees it, positive with the left side down. The tip is on the right, or on the left held the other way round.
   // round(clamp(-roll / 22, -1, 1) * 2): full at 22 degrees, a step changes at 5.5 and 16.5
   const int16_t roll  = DOG_ROLL_SIGN * (normal() ? -angle : angle);
@@ -515,8 +508,23 @@ static void drawHistory(int16_t x0) {
 
 // ---- For the other home views (ts101_dog_home_views.cpp) ----
 int16_t  dogHomeRollDeg() { return rollDeg; }
-int16_t  dogHomeAlongDeg() { return alongDeg; }
-int16_t  dogHomeTurnDeg() { return turnDeg; }
+// The lie of the iron from the newest reading, without the dog's smoothing: the iron drawn on the screen follows at once.
+// along: the long axis against the horizon, tip down positive; turn: about the long axis, 0 board up, +-90 on its side
+bool dogIronLie(int16_t &along, int16_t &turn) {
+  const int32_t  raw[3] = {dogAccelRaw[0], dogAccelRaw[1], dogAccelRaw[2]};
+  const uint32_t length = magnitude(raw[0], raw[1], raw[2]);
+  if (!length) {
+    return false; // no sensor
+  }
+  along                 = asinDeg(DOG_ACCEL_ALONG_SIGN * raw[DOG_ACCEL_ALONG], length);
+  const int32_t  across = raw[DOG_ACCEL_ACROSS], through = raw[DOG_ACCEL_NORMAL];
+  const uint32_t side   = magnitude(across, through, 0);
+  if (side) {
+    const int16_t a = asinDeg(across, side);
+    turn            = DOG_ACCEL_TURN_SIGN * (through >= 0 ? a : (a >= 0 ? 180 - a : -180 - a));
+  }
+  return true;
+}
 bool     dogHomeTipDown() { return tipDown; }
 bool     dogHomeShaking() { return shaking; }
 int8_t   dogHomeTrend() { return trendDirection; }

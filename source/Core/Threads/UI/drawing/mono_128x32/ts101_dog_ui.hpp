@@ -112,8 +112,7 @@ void     dogDrawHomeView(uint8_t view, uint16_t shownTemperature);
 void     dogDrawHomeHead(int16_t x); // the dog's head as on the home screen, following the sensor
 void     dogDrawSmallIron();         // the small iron of the home screen, lying as the real one does
 int16_t  dogHomeRollDeg();           // the tilt as the viewer sees it, positive with the left side down
-int16_t  dogHomeAlongDeg();          // the long axis against the horizon, positive with the tip down
-int16_t  dogHomeTurnDeg();           // the turn about the long axis: 0 board up, +-90 on its side, +-180 board down
+bool     dogIronLie(int16_t &along, int16_t &turn); // from the newest reading: the long axis (tip down +) and the turn about it (0 board up)
 bool     dogHomeTipDown();
 bool     dogHomeShaking();
 int8_t   dogHomeTrend(); // the arrow next to the temperature: 1 up, -1 down, 0 none

@@ -23,9 +23,10 @@ static void drawLie() {
   put(60, 7, "Y ", dogAccelRaw[1]);
   put(0, 16, "Z ", dogAccelRaw[2]);
   dogSmallRight(OLED_WIDTH - 1, DOG_T("LAGE", "LIE"), 16);
-  dogHomeMotionUpdate();
-  put(0, 25, DOG_T("LÄNGS ", "ALONG "), dogHomeAlongDeg());
-  put(66, 25, DOG_T("DREH ", "TURN "), dogHomeTurnDeg());
+  int16_t along = 0, turn = 0;
+  dogIronLie(along, turn);
+  put(0, 25, DOG_T("LÄNGS ", "ALONG "), along);
+  put(66, 25, DOG_T("DREH ", "TURN "), turn);
 }
 
 // The raw values behind the last info page. State 1 = which one

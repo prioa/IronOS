@@ -195,7 +195,7 @@ static uint32_t fifthRoot(uint32_t ratio) {
   uint32_t lo = ratio, hi = 65536;
   while (hi - lo > 1) {
     const uint32_t mid = (lo + hi) / 2;
-    uint64_t       p   = 65536;
+    uint32_t       p   = 65536; // p * mid stays below 2^32: mid is under 65536
     for (uint8_t i = 0; i < 5; i++) {
       p = p * mid / 65536;
     }
@@ -217,10 +217,10 @@ static uint16_t minutesToHandWarm() {
   }
   // Each 11 s the distance to the room shrinks by the fifth root of now/before; count the steps until it is under 50 C
   const uint32_t factor = fifthRoot((uint32_t)now * 65536 / before);
-  uint32_t       left   = (uint32_t)now * 256;
+  uint32_t       left   = (uint32_t)now * 16; // 16 = 1 C; times the factor it stays below 2^32
   uint16_t       steps  = 0;
-  while (left > (uint32_t)(HAND_WARM_C - room) * 256 && steps < 1000) {
-    left = (uint64_t)left * factor / 65536;
+  while (left > (uint32_t)(HAND_WARM_C - room) * 16 && steps < 1000) {
+    left = left * factor / 65536;
     steps++;
   }
   return steps >= 1000 ? 0 : ((steps * 11 + 30) / 60 ? (steps * 11 + 30) / 60 : 1); // rounded, at least a minute
@@ -406,19 +406,20 @@ static IronMarks drawIronIn(const IronBox &box, int32_t tilt, int32_t turn, bool
   return marks;
 }
 
-// What the sensor says, eased so single readings don't jump: the tilt of the long axis and the turn about it, both as the viewer sees them
+// What the sensor says: the tilt of the long axis and the turn about it, both as the viewer sees them. The sensor is read 10 times a
+// second; halfway to each new reading per frame (25 a second), so the iron follows within a tenth of a second without jumping
 void dogIronPose(int32_t &tilt, int32_t &turn) {
   static int32_t shownTilt = 0, shownTurn = 0;
-  dogHomeMotionUpdate();
-  int32_t targetTilt = dogHomeAlongDeg();
-  targetTilt         = targetTilt > IRON_TILT_MAX ? IRON_TILT_MAX : (targetTilt < -IRON_TILT_MAX ? -IRON_TILT_MAX : targetTilt);
+  int16_t        along = 0, about = 0;
+  dogIronLie(along, about);
+  int32_t targetTilt = along > IRON_TILT_MAX ? IRON_TILT_MAX : (along < -IRON_TILT_MAX ? -IRON_TILT_MAX : along);
   // Held the other way round, the side towards the viewer is the other one
-  const int32_t targetTurn = normal() ? dogHomeTurnDeg() : -dogHomeTurnDeg();
+  const int32_t targetTurn = normal() ? about : -about;
   int32_t       turnStep   = targetTurn - shownTurn;
   turnStep                 = turnStep > 180 ? turnStep - 360 : (turnStep < -180 ? turnStep + 360 : turnStep); // the short way round
-  auto ease = [](int32_t difference) { return difference / 3 ? difference / 3 : (difference > 0) - (difference < 0); };
-  shownTilt += ease(targetTilt - shownTilt);
-  shownTurn += ease(turnStep);
+  auto half = [](int32_t difference) { return difference / 2 ? difference / 2 : difference; }; // the last degree at once
+  shownTilt += half(targetTilt - shownTilt);
+  shownTurn += half(turnStep);
   shownTurn = shownTurn > 180 ? shownTurn - 360 : (shownTurn < -180 ? shownTurn + 360 : shownTurn);
   tilt      = shownTilt;
   turn      = shownTurn;
