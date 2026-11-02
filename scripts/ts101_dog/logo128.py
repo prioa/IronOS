@@ -2,7 +2,7 @@
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image
 
-AREA = 5 * 1024
+AREA = 2 * 1024
 ART = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'art')
 
 def portrait(sprite, y, smoke=()):
@@ -90,7 +90,7 @@ def frames_portrait():
     f += [portrait(dog, REST_Y, smoke_puffs(i)) for i in range(36)]              # stands there smoking
     return f
 
-LOGO_ADDR = 0x08000000 + 95 * 1024  # FLASH_LOGOADDR with TS101_DOG_UI (configuration.h)
+LOGO_ADDR = 0x08000000 + 98 * 1024  # FLASH_LOGOADDR with TS101_DOG_UI (configuration.h)
 
 def merge(firmware_hex, logo, out_hex):
     """Write firmware + logo as one hex file, so the stock bootloader flashes both in one go."""

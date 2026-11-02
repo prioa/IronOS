@@ -93,8 +93,8 @@ LDSCRIPT=./Core/BSP/Miniware/stm32f103.ld
 
 ifeq ($(model),$(filter $(model),TS101))
 # 128K, but logo must be at 99K so their broken ass DFU can flash it
-# (TS101_DOG_UI: the 128x32 logo area spans 95K-100K, so the app must end below 95K)
-flash_size=95k
+# (TS101_DOG_UI: the 128x32 logo area spans 98K-100K, so the app must end below 98K)
+flash_size=98k
 bootldr_size=0x8000
 DEVICE_DFU_ADDRESS=0x08008000
 else

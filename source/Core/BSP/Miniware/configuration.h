@@ -307,9 +307,9 @@
 // as device resets before file finishes copying
 // So logo has to be located on page 99 or else it cant be flashed on stock bootloader
 #ifdef TS101_DOG_UI
-// 128x32 animated logos need more room: pages 95-99 (the app is limited to 95K in the Makefile)
-#define FLASH_LOGOADDR      (0x08000000 + (95 * 1024))
-#define FLASH_LOGO_LENGTH   (5 * 1024)
+// 128x32 animated logos need more room: pages 98-99 (the app is limited to 98K in the Makefile). The dog's animation takes 1.2K
+#define FLASH_LOGOADDR      (0x08000000 + (98 * 1024))
+#define FLASH_LOGO_LENGTH   (2 * 1024)
 #else
 #define FLASH_LOGOADDR      (0x08000000 + (99 * 1024))
 #endif

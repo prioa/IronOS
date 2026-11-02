@@ -60,8 +60,9 @@ into reference images for `preview/compare.py`.
   (`DOG_HANDLE_LIMIT_X10C`, 70 C for 2 s: the heater stops, and the iron won't start until the handle is cooler; the handle
   NTC table is extended up to 100 C for this), button lock.
 - **Languages**: German texts in the DE build, English in every other build (the fonts only have Latin letters).
-- **128x32 boot logo**: animated logo format `0xAB` (see `source/Core/Drivers/BootLogo.cpp`), stored in the 5K at
-  95K-100K. The app is limited to 95K (`flash_size` in `source/Makefile`); every language fits (CJK ~92K).
+- **128x32 boot logo**: animated logo format `0xAB` (see `source/Core/Drivers/BootLogo.cpp`), stored in the 2K at
+  98K-100K (the dog's animation takes 1.2K). The app is limited to 98K (`flash_size` in `source/Makefile`); every language fits (CJK ~92K).
+  The stock bootloader can't flash above 100K, so the logo has to stay below that.
   The animation is drawn upright, for holding the iron with the tip up: the dog with cap, sunglasses and bag walks in from
   the cable end and stands there smoking.
 
