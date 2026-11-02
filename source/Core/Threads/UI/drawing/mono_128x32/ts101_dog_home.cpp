@@ -124,6 +124,7 @@ static TickType_t motionLast    = 0;
 static TickType_t shakeUntil    = 0;
 static bool       motionStarted = false, tipDown = false, shaking = false, poseMirrored = false, stepFrame = false;
 static uint8_t    gaze = GAZE_FRONT, gazeTarget = GAZE_FRONT; // steps of GAZE: where the head is, where it is going
+static int16_t    rollDeg = 0;                                // the tilt as the viewer sees it, positive with the left side down
 static uint8_t    cockFrames = 0, idleFrames = 0, idleGap = 0, tongueGap = 0, hopFrame = 0, hopRow = 0, idleCount = 0;
 static DogPose    idlePose   = DOG_POSE_BLINK;
 static DogPose    pose       = DOG_POSE_FRONT;
@@ -165,6 +166,7 @@ static void readLie(const int32_t raw[3], TickType_t now) {
   if (strength == 0) {
     shaking = tipDown = false; // no sensor, or it could not be read
     gazeTarget        = GAZE_FRONT;
+    rollDeg           = 0;
     return;
   }
   if (!restMagnitude) {
@@ -185,6 +187,7 @@ static void readLie(const int32_t raw[3], TickType_t now) {
   // As the viewer sees it, positive with the left side down. The tip is on the right, or on the left held the other way round.
   // round(clamp(-roll / 22, -1, 1) * 2): full at 22 degrees, a step changes at 5.5 and 16.5
   const int16_t roll  = DOG_ROLL_SIGN * (normal() ? -angle : angle);
+  rollDeg             = roll;
   const int16_t size  = roll < 0 ? -roll : roll;
   const uint8_t steps = size >= 17 ? 2 : (size * 2 + 11) / 22;
   gazeTarget          = roll > 0 ? GAZE_FRONT - steps : GAZE_FRONT + steps; // against the tilt, towards you
@@ -458,7 +461,23 @@ static void drawHistory(int16_t x0) {
   }
 }
 
+// ---- For the other home views (ts101_dog_home_views.cpp) ----
+int16_t  dogHomeRollDeg() { return rollDeg; }
+bool     dogHomeTipDown() { return tipDown; }
+bool     dogHomeShaking() { return shaking; }
+int8_t   dogHomeTrend() { return trendDirection; }
+uint8_t  dogHomeHistoryCount() { return historyCount; }
+uint16_t dogHomeHistoryAt(uint8_t i) { return history[(historyHead + HISTORY_SAMPLES - historyCount + i) % HISTORY_SAMPLES]; }
+void     dogDrawHomeHead(int16_t x) {
+  dogHomeMotionUpdate();
+  drawPose(x, hopRow);
+}
+
 void dogDrawHome(uint16_t shownTemperature) {
+  if (getSettingValue(SettingsOptions::DogHomeVariant)) {
+    dogDrawHomeView(getSettingValue(SettingsOptions::DogHomeVariant), shownTemperature);
+    return;
+  }
   static bool hot = false; // the tip is still hot: the number blinks if the setting asks for it
   const uint16_t tipC = TipThermoModel::getTipInC();
   if (tipC > 55) {

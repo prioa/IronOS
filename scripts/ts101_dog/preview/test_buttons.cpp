@@ -102,8 +102,18 @@ int main() {
   idle(500);
 
   puts("== Start");
+  const uint16_t view = getSettingValue(SettingsOptions::DogHomeVariant);
+  click(false);
+  expectMode(OperatingMode::HomeScreen, "Klick hinten am Start bleibt auf dem Start");
+  expect(getSettingValue(SettingsOptions::DogHomeVariant) == (view + 1) % DOG_HOME_VIEWS, "und zeigt die nächste Ansicht");
+  for (int i = 1; i < DOG_HOME_VIEWS; i++) {
+    click(false);
+  }
+  expect(getSettingValue(SettingsOptions::DogHomeVariant) == view, "nach fünf Klicks wieder die erste");
   hold(false, 800);
-  expectMode(OperatingMode::HomeScreen, "Halten hinten am Start tut nichts");
+  expectMode(OperatingMode::SettingsMenu, "Halten hinten am Start öffnet das Menü");
+  expect(getSettingValue(SettingsOptions::DogHomeVariant) == view, "und schaltet dabei keine Ansicht weiter");
+  toHome();
   click(true);
   expectMode(OperatingMode::Soldering, "Klick vorne startet das Löten");
   moved();
@@ -245,11 +255,11 @@ int main() {
     }
   };
   setSettingValue(SettingsOptions::SolderingTemp, 335);
-  click(false);
-  expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü");
+  hold(false, 800);
+  expectMode(OperatingMode::SettingsMenu, "Halten hinten am Start öffnet das Menü");
   animated = false;
-  toEntry(7);
-  expect(!animated, "sieben Klicks hinten: nichts schiebt");
+  toEntry(8);
+  expect(!animated, "acht Klicks hinten: nichts schiebt");
   expectMode(OperatingMode::SettingsMenu, "und wieder auf dem ersten Eintrag, kein Ende");
   hold(true, 800);
   expectMode(OperatingMode::SettingsMenu, "Halten vorne auf einem Eintrag tut nichts");
@@ -270,7 +280,7 @@ int main() {
   click(false);
   expect(setPoint() == 335, "nach 2 s ohne Taste zurück auf dem Eintrag: hinten ist wieder nächster Eintrag");
   expectMode(OperatingMode::SettingsMenu, "bleibt im Menü");
-  toEntry(6); // wieder Eigenes Ziel
+  toEntry(7); // wieder Eigenes Ziel
   click(true);
   hold(false, 800);
   click(true);
@@ -287,7 +297,15 @@ int main() {
   setSettingValue(SettingsOptions::SolderingTemp, 320);
 
   puts("== Auswahl: Sperre, Klick vorne sofort nächster Wert");
-  toEntry(4); // Sperre
+  toEntry(4); // Startbild
+  const uint16_t homeView = getSettingValue(SettingsOptions::DogHomeVariant);
+  click(true);
+  expect(getSettingValue(SettingsOptions::DogHomeVariant) == (homeView + 1) % DOG_HOME_VIEWS, "Startbild: vorne sofort die nächste Ansicht");
+  for (int i = 1; i < DOG_HOME_VIEWS; i++) {
+    click(true);
+  }
+  expect(getSettingValue(SettingsOptions::DogHomeVariant) == homeView, "nach der letzten wieder die erste");
+  toEntry(1); // Sperre
   setSettingValue(SettingsOptions::LockingMode, 0);
   click(true);
   expect(getSettingValue(SettingsOptions::LockingMode) == 1, "vorne: Nur Boost, sofort");
@@ -333,7 +351,7 @@ int main() {
   hold(false, 1000);
 
   puts("== Info");
-  toEntry(2); // Info
+  toEntry(3); // Info
   click(true);
   click(true);
   expectMode(OperatingMode::SettingsMenu, "Info: vorne auf einer normalen Seite tut nichts");

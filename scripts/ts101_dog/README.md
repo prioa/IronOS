@@ -9,7 +9,7 @@ Values apply at once, there is nothing to confirm. Both buttons together stop at
 
 | Screen | Front click | Rear click | Front hold | Rear hold |
 |---|---|---|---|---|
-| Start | solder | menu | nothing | nothing |
+| Start | solder | next home view | nothing | menu |
 | Soldering | one solder hotter | one solder colder | boost, 30 s at most | stop after 0.5 s |
 | Menu, section | open it | next entry | nothing | up a level, from the top to Start |
 | Menu, switch or choice | next value, blinks once | next entry | nothing | up a level, from the top to Start |
@@ -28,6 +28,15 @@ into reference images for `preview/compare.py`.
   trend arrow (from 0.3 C/s, off below 0.15 C/s), the curve of the last 10 minutes and the button pair next to the buttons. Held
   the other way round the blocks swap sides and the front button's box moves to the left; nothing is mirrored. The number blinks
   while hot if `COOLING TEMP BLINK` is on. The history is fed on every GUI frame, so the curve goes on through soldering.
+- **Home views** (`ts101_dog_home_views.cpp`, setting `DogHomeVariant`, menu entry `Startbild`, or a rear click on Start): from the design page,
+  `Hund` (the screen above), `Symbole` (thermometer filling 0-400 C, a clock filling with the soldering minutes since power on up to an hour,
+  an empty hourglass with the lifetime hours: the iron knows no lifetime of a tip), `Schäfer` (tip and grip small on the left, a German Shepherd
+  trotting in, wagging, sitting and leaving in a loop of 12 s: seven sprites in `art/home.txt`, `preview/check_views.py` compares it with
+  frames of the design in `preview/design/`), `Abkühlen` (the large temperature, `HANDWARM IN n MIN` from how fast the tip cooled towards the grip's
+  temperature over the last 55 s, the last 10 minutes above the 50 C line) and `Kolben` (the iron drawn from its profile, the display window,
+  button and cable turning with the tilt, tip down with the tip down, wobbling when shaken; the temperatures at the tip and above the grip in
+  the unit of the setting). The design renders the iron in 3D with a depth buffer at 4x4 supersampling, far beyond the 20K of RAM: the firmware
+  draws it column by column instead.
 - **Dog**: 32x32 poses from `art/ts101_home_assets.h`, the source of truth; `make_home_assets.py` converts them and leaves out the unused `EYES_*`. 8 frames a
   second: five gaze steps (the two `TURN_*` poses, each also mirrored at draw time, and `FRONT`), target `round(clamp(-roll / 22, -1, 1) * 2) + 2`, at most one step
   every 2 frames. Shaken it lays its ears back and hops, then cocks its head for 5 frames; tip down it looks up; in the middle step it blinks every 6-8 s and shows

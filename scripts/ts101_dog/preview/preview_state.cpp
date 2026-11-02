@@ -35,6 +35,10 @@ void nextSettingValue(const enum SettingsOptions o) {
     settings[o] = (settings[o] + 1) % 3;
     return;
   }
+  if (o == SettingsOptions::DogHomeVariant) { // and the five home views
+    settings[o] = (settings[o] + 1) % DOG_HOME_VIEWS;
+    return;
+  }
   const bool twoStates = o == SettingsOptions::OLEDInversion || o == SettingsOptions::TemperatureInF || o == SettingsOptions::ReverseButtonTempChangeEnabled || o == SettingsOptions::CalibrateCJC || o == SettingsOptions::DogSolderView;
   settings[o]          = (twoStates && settings[o] >= 1) ? 0 : settings[o] + 1;
 }
@@ -122,6 +126,8 @@ void previewApply(const PreviewScene &s) {
   tipMissing                                   = false;
   dogSolderTimerStart = dogReachedUntil = 0;
   dogWokeHeating                                 = false;
+  settings[SettingsOptions::DogHomeVariant]      = 0;
+  handleX10                                      = 310;
   settings[SettingsOptions::TotalSolderMinutes]  = 42 * 60 + 17;
   settings[SettingsOptions::TotalSolderSessions] = 214;
   settings[SettingsOptions::TotalBoosts]         = 17;
@@ -140,7 +146,7 @@ static void setBoostPreview(uint8_t) {}
 #endif
 
 // ---- Home screen ----
-enum class HomeCurve { Cold, Heating, Cooling };
+enum class HomeCurve { Cold, Heating, Cooling, Newton };
 
 // The last 10 minutes through dogHomeTick, ending at the scene's time and tip temperature
 static void feedHistory(HomeCurve kind, uint16_t endC) {
@@ -154,6 +160,10 @@ static void feedHistory(HomeCurve kind, uint16_t endC) {
       t = 326 + (age / 40 % 3 == 0 ? -25 : 0); // soldering, with dips under load
     } else if (age < 300) {
       t = 26 + (int)(300 * exp(-(300 - age) / 45.0)); // cooling down
+    }
+    if (kind == HomeCurve::Newton && age < 300) {
+      t = 25 + (int)((endC - 25) * exp(age / 150.0)); // cooling towards 25 C, ending at endC
+      t = t > 330 ? 330 : t;
     }
     if (kind == HomeCurve::Cooling && age < 40) {
       t = endC + age * 2;
@@ -240,6 +250,17 @@ static void idleFor(int extraFrames, int firstAt = 52) {
   dogHomeMotionUpdate();
   previewTicks = end;
   runFrames(firstAt + extraFrames);
+}
+
+// A home view after the iron has lain at this angle for a while; the iron's view eases, so draw it a few times
+static void viewShot(uint8_t view, int degrees, HomeCurve curve = HomeCurve::Cold) {
+  settings[SettingsOptions::DogHomeVariant] = view;
+  feedHistory(curve, tipC);
+  holdAtAngle(degrees);
+  for (int i = 0; i < 12; i++) {
+    OLED::clearScreen();
+    ui_draw_homescreen_simplified(settings[SettingsOptions::TemperatureInF] ? tipC * 9 / 5 + 32 : tipC);
+  }
 }
 
 static void home() {
@@ -396,6 +417,30 @@ std::vector<PreviewScene> previewScenes() {
       {"h8c_zunge", H0, 80, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 80); idleFor(3, 24); ui_draw_homescreen_simplified(80); }},
       {"h10_hinten_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(false, 100); ui_draw_homescreen_simplified(26); }},
       {"h10_vorne_gedrueckt", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); calm(); pressed(true, 100); ui_draw_homescreen_simplified(26); }},
+      // The other home views, picked with a rear click on the home screen
+      {"v1_symbole", H0, 80, 350, 0, 201, false, [] { dogSessionMinutes = 38; viewShot(1, 0, HomeCurve::Cooling); }},
+      {"v1_symbole_kalt", H0, 24, 350, 0, 201, false, [] { dogSessionMinutes = 0; viewShot(1, 0); }},
+      {"v1_symbole_heiss", H0, 380, 350, 0, 201, false, [] { dogSessionMinutes = 75; viewShot(1, 0, HomeCurve::Heating); }},
+      {"v1_symbole_gedreht", H0, 80, 350, 0, 201, false, [] { orient(false); dogSessionMinutes = 38; viewShot(1, 0, HomeCurve::Cooling); }},
+      {"v3_schaeferhund_00", 6000000 + 125 * 0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_08", 6000000 + 125 * 8, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_20", 6000000 + 125 * 20, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_30", 6000000 + 125 * 30, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_31", 6000000 + 125 * 31, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_50", 6000000 + 125 * 50, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_78", 6000000 + 125 * 78, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(2, 0); }},
+      {"v3_schaeferhund_heiss", 6000000 + 125 * 50, 385, 350, 0, 201, false, [] { handleX10 = 455; viewShot(2, 0); }},
+      {"v4_abkuehlen", H0, 80, 350, 0, 201, false, [] { handleX10 = 250; viewShot(3, 0, HomeCurve::Newton); }},
+      {"v4_abkuehlen_heiss", H0, 180, 350, 0, 201, false, [] { handleX10 = 300; viewShot(3, 0, HomeCurve::Newton); }},
+      {"v4_handwarm", H0, 40, 350, 0, 201, false, [] { handleX10 = 250; viewShot(3, 0, HomeCurve::Cooling); }},
+      {"v4_gedreht", H0, 80, 350, 0, 201, false, [] { orient(false); handleX10 = 250; viewShot(3, 0, HomeCurve::Newton); }},
+      {"v5_kolben", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 0); }},
+      {"v5_kolben_links20", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, -20); }},
+      {"v5_kolben_rechts20", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 20); }},
+      {"v5_kolben_rechts40", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 40); }},
+      {"v5_kolben_spitze_unten", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 60); }},
+      {"v5_kolben_heiss_f", H0, 320, 350, 0, 201, false, [] { settings[SettingsOptions::TemperatureInF] = 1; handleX10 = 410; viewShot(4, 0); settings[SettingsOptions::TemperatureInF] = 0; }},
+      {"v5_kolben_gedreht", H0, 24, 350, 0, 201, false, [] { orient(false); handleX10 = 220; viewShot(4, 0); }},
       // Soldering: one screen, heating, cooling or ready
       {"n1_aufheizen_170", T, 170, 350, 650, 201, false, [] { heating170(); }},
       {"n1_aufheizen_170_wippt", T + 500, 170, 350, 650, 201, false, [] { heating170(); }},

@@ -105,6 +105,17 @@ extern uint16_t         dogSessionMinutes;   // soldering minutes since power on
 void dogCountSession();                      // a soldering session started; saved on the home screen
 void dogCountBoost();                        // a boost started; saved on the home screen
 
+// The home views besides the dog (DogHomeVariant 1-4, ts101_dog_home_views.cpp). A rear click on the home screen picks the next
+#define DOG_HOME_VIEWS 5
+void     dogDrawHomeView(uint8_t view, uint16_t shownTemperature);
+void     dogDrawHomeHead(int16_t x); // the dog's head as on the home screen, following the sensor
+int16_t  dogHomeRollDeg();           // the tilt as the viewer sees it, positive with the left side down
+bool     dogHomeTipDown();
+bool     dogHomeShaking();
+int8_t   dogHomeTrend(); // the arrow next to the temperature: 1 up, -1 down, 0 none
+uint8_t  dogHomeHistoryCount();      // samples of the last 10 minutes, 11 s apart
+uint16_t dogHomeHistoryAt(uint8_t i); // 0 is the oldest, in C
+
 // Tip temperature history for the sparkline and the rate, in C whatever the display shows
 void dogCurveReset();
 #define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2) // one sample a column

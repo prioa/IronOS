@@ -58,6 +58,16 @@ extern const uint8_t iconKeyCycle[];
 extern const uint8_t iconKeyEdit[];
 extern const uint8_t iconMiniDown[];
 extern const uint8_t iconMiniRight[];
+extern const uint8_t dogV3Trot0[];
+extern const uint8_t dogV3Trot1[];
+extern const uint8_t dogV3Trot2[];
+extern const uint8_t dogV3Trot3[];
+extern const uint8_t dogV3Wag0[];
+extern const uint8_t dogV3Wag1[];
+extern const uint8_t dogV3Sit[];
+extern const uint8_t iconV1Thermo[];
+extern const uint8_t iconV1Clock[];
+extern const uint8_t iconV1Glass[];
 extern const uint8_t *const dogZzz[DOG_ZZZ_STEPS];
 extern const uint8_t *const dogRun[DOG_RUN_FRAMES];
 
