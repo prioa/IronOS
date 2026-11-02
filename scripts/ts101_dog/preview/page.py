@@ -11,9 +11,9 @@ OTHER = [('h1_ruhig', 'Start'), ('h6_umgedreht', 'Start, turned'), ('h9_runter',
          ('n1_aufheizen_170', 'Heating, 170°'), ('n2_kurz_vor_ziel', 'Heating, nearly there'), ('n3_bereit', 'Ready'), ('n4_lotwechsel', 'Right after a change of solder'),
          ('n5_abkuehlen', 'Cooling to a colder solder'), ('n6_umgedreht', 'Soldering, turned'), ('b1_boost', 'Boost'), ('b2_boost_gedreht', 'Boost, turned'), ('r4_detail_gedreht', 'Detail, turned'), ('s03_schlaf_z_2', 'Sleep'), ('s32_gedreht', 'Sleep, turned'), ('s22_wach_bild3', 'Sleep, waking'), ('r6_stopp_gedreht', 'Stop, turned'), 
          ('s4_druck', 'Front pressed'), ('s5_halten', 'Front held'), ('s31_aus_nach_aus', 'Sleep, auto-off disabled'),
-         ('m00_oben', 'Menu, top of the list'), ('m02_ziel_aendern', 'Changing a number'), ('m05_anzeige', 'Display settings'), ('m09_werte_1', 'Readings'), ('m11_ende', 'End of the list'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
+         ('m01_ziel', 'Menu, a number'), ('m02_ziel_aendern', 'Changing it'), ('m03_loeten', 'A section'), ('m06_sperre_alles', 'A choice'), ('m40_info_strom', 'Info'), ('m52_gedreht', 'Menu, turned'), ('w5_sperre', 'Lock notice'), ('w4_griff', 'Handle too hot')]
 TABLE = [('Start', 'Solder', 'Menu', 'Nothing', 'Nothing'), ('Soldering', 'One solder hotter', '*One solder colder', '*Boost, 30 s at most', '*Stop after 0.5 s'),
-         ('Menu', '*Next value, or change', '*Next row', '*Row up, repeating', 'To Start'), ('Number', '+', '*−', 'Faster +', 'Done'), ('Sleep', 'Wake', 'Wake', 'Wake', '*Heater off, to Start')]
+         ('Menu', '*Open, next value, or change', '*Next entry', '*Nothing', 'Back'), ('Number', '+', '*−', 'Faster +', 'Done'), ('Sleep', 'Wake', 'Wake', 'Wake', '*Heater off, to Start')]
 CHOICES = ['Lock: hold both buttons on Start to switch it on or off. The SPERRE menu entry must not be off. To unlock: both buttons stop, then the same gesture on Start.',
            'A set point that is no preset shows Soll on Start. Presets read SnBi, Bleilot, Bleifrei, SnCu, Masse.',
            'Clicks change the solder at once while soldering, no view in between, nothing at the ends. There is no Temperature view any more.',

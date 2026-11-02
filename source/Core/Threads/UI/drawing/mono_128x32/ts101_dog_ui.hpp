@@ -71,16 +71,17 @@ void       dogPressConsumed();              // the press did its job: it counts 
 void       dogSetLocked(bool locked);       // button lock: no field inverts and no bar fills
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
-// The settings menu, drawn on its own for the preview: pos is the marked row of the list
-void dogDrawMenuList(uint8_t pos);
-void dogDrawMenuValue(uint8_t pos);
+// The settings menu, drawn on its own for the preview. Sections: 0 the top level, 1 solder, 2 sleep, 3 display, 4 info
+void dogDrawMenuList(uint8_t section, uint8_t pos);
+void dogDrawMenuValue(uint8_t section, uint8_t pos);
 void dogMenuBlink(); // the value just changed: it inverts once
+#define DOG_MENU_SECTION_INFO 4
 
 const char *dogTipName(); // the tip type picked in the menu, in the small font
 
-// The readings at the end of the menu: returns the label and writes the value; the last row leads on to the raw debug values
-#define DOG_INFO_ROWS 10
-const char *dogInfoRow(uint8_t row, char *value);
+// The two rows of an info page (menu -> info); the last page leads on to the raw debug values
+#define DOG_INFO_PAGES 5
+void dogDrawInfoRows(uint8_t page);
 
 // ---- The solders: a click while soldering moves one up or down, nothing at the ends ----
 void   dogJumpPreset(bool up);

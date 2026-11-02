@@ -535,55 +535,65 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
 }
 
 /*
- * The readings at the end of the menu, one label and one value each
+ * An info page in the menu: two rows of label and value, the second one short of the button boxes
  */
-const char *dogInfoRow(uint8_t row, char *value) {
-  value[0] = 0;
-  switch (row) {
+void dogDrawInfoRows(uint8_t page) {
+  char        left[14], right[14];
+  const char *label1 = "", *label2 = "";
+  const char *value1 = right, *value2 = left;
+  switch (page) {
   case 0: {
     const int8_t source = getPowerSourceNumber();
-    formatX10(value, voltsX10(), 'V');
-    return source == 0 ? "DC" : (source == 1 ? "USB" : "USB-PD");
+    label1              = source == 0 ? "DC" : (source == 1 ? "USB" : "USB-PD");
+    label2              = DOG_T("GRENZE", "LIMIT");
+    formatX10(right, getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0), 'V');
+    const int32_t limit = getX10WattageLimits();
+    formatUnit(left, limit > 0 ? limit / 10 : 0, " W");
+    break;
   }
   case 1: {
-    const int32_t limit = getX10WattageLimits();
-    formatUnit(value, limit > 0 ? limit / 10 : 0, " W");
-    return DOG_T("GRENZE", "LIMIT");
-  }
-  case 2:
-    strcpy(value, dogTipName());
-    return DOG_T("TYP", "TYPE");
-  case 3: {
-    char *end = dogFormat(value, getTipResistanceX10() / 10);
+    label1 = DOG_T("TYP", "TYPE");
+    label2 = DOG_T("WIDERST.", "RESIST.");
+    value1 = dogTipName();
+    char *end = dogFormat(left, getTipResistanceX10() / 10);
     *end++    = '.';
     *end++    = '0' + getTipResistanceX10() % 10;
     strcpy(end, " OHM");
-    return DOG_T("WIDERSTAND", "RESISTANCE");
+    break;
   }
-  case 4: {
+  case 2: {
+    label1 = DOG_T("GRIFF", "GRIP");
+    label2 = DOG_T("LAGE", "SIDE");
     const uint32_t handle = getHandleTemperature(0);
-    char          *end    = dogFormat(value, handle / 10);
-    *end++                = '.';
-    *end++                = '0' + handle % 10;
+    char *end = dogFormat(right, handle / 10);
+    *end++    = '.';
+    *end++    = '0' + handle % 10;
     strcpy(end, "°");
-    return DOG_T("GRIFF", "GRIP");
+    value2 = OLED::getRotation() ? DOG_T("RECHTS", "RIGHT") : DOG_T("LINKS", "LEFT");
+    break;
   }
-  case 5:
-    strcpy(value, normal() ? DOG_T("RECHTS", "RIGHT") : DOG_T("LINKS", "LEFT"));
-    return DOG_T("LAGE", "SIDE");
-  case 6: {
+  case 3: {
+    label1 = DOG_T("GESAMT", "TOTAL");
+    label2 = DOG_T("LETZTE", "LAST");
     const uint16_t minutes = getSettingValue(SettingsOptions::TotalSolderMinutes);
-    strcpy(dogFormatTime(value, minutes / 60, minutes % 60), " H");
-    return DOG_T("GESAMT", "TOTAL");
+    char *end = dogFormatTime(right, minutes / 60, minutes % 60);
+    strcpy(end, " H");
+    dogFormatTime(left, dogLastSessionSeconds / 60, dogLastSessionSeconds % 60);
+    break;
   }
-  case 7:
-    dogFormatTime(value, dogLastSessionSeconds / 60, dogLastSessionSeconds % 60);
-    return DOG_T("LETZTE", "LAST");
-  case 8:
-    strcpy(value, BUILD_VERSION + 1); // without the v
-    return "VERSION";
   default:
-    return "DEBUG";
+    label1 = "VERSION";
+    label2 = "DEBUG";
+    value1 = BUILD_VERSION + 1; // without the v
+    value2 = "";
+    break;
   }
+  const int16_t x0 = normal() ? 0 : 35;
+  if (dogTextWidth(dogFontSmall, value1) + dogTextWidth(dogFontSmall, label1) + 6 <= OLED_WIDTH) {
+    dogSmall(0, label1, 15); // a long development version takes the whole row
+  }
+  dogSmallRight(OLED_WIDTH - 1, value1, 15);
+  dogSmall(x0, label2, 23);
+  dogSmallRight(normal() ? 94 : OLED_WIDTH - 1, value2, 23);
 }
 #endif
