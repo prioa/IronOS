@@ -14,7 +14,8 @@ extern uint16_t   dogHeatupStartTempC; // tip temperature when heating up starte
 extern TickType_t dogReachedUntil;     // the screen stays inverted until this tick: the set point was just reached
 extern uint8_t    dogSleepWakeFrame;   // 0 asleep, 1-3 the frames of the dog looking up
 extern uint32_t   dogLastSessionSeconds; // length of the last soldering session, for the home screen
-extern TickType_t dogLotChangedAt;     // a click changed the solder: its name is marked for 2 s
+extern TickType_t dogLotChangedAt;     // a click changed the solder: its name is marked for 2 s, on the soldering screen its alloy shows
+extern bool       dogWokeHeating;      // back from sleep and not at the set point yet: the heating screen again instead of soldering
 
 char *dogFormatTime(char *out, uint16_t major, uint8_t minor); // major:mm
 
@@ -110,6 +111,9 @@ void dogCurveSample(uint16_t tipC, TickType_t interval = DOG_CURVE_SAMPLE_TICKS)
 // The sparkline of the soldering screen, x 0-56 and y 23-31 on a fixed scale of 0-420 C: the newest sample on the right, neighbours
 // joined with vertical strokes, the set point dotted across the full width
 void dogDrawCurve(uint16_t setC);
+// The curve of the soldering screen: one sample a column from x0, the newest on the right once full; the range follows the samples and
+// the set point, so the dotted set line (every 3rd pixel) jumps with a change of solder
+void dogDrawCurveStage(int16_t x0, uint8_t width, uint8_t y0, uint8_t y1, uint16_t setC);
 int32_t dogCurveRateC(); // degrees C a second over the last second
 
 // Lifetime soldering time, counted while soldering mode runs the heater and saved when back on the home screen

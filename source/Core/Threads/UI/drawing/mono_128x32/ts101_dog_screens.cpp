@@ -79,11 +79,13 @@ static bool drawStopHold(uint16_t temperature) {
   return true;
 }
 
-// ---- Boost: the stage on the left, the temperature block on the right; turned, they swap ----
-// Normal: stage from x=0, block at x=90 (arrow) and 97 (digits). Turned: block at 0, stage from 35.
+// ---- Soldering and boost: the stage on the left, the temperature block on the right; turned, they swap ----
+// Normal: stage from x=0, block at x=90 (arrow) and 97 (digits), keys at 96. Turned: block at 0, keys at 0, stage from 35.
 static int16_t stageX() { return normal() ? 0 : 35; }
 static int16_t blockX() { return normal() ? 90 : 0; }
-#define STAGE_WIDTH 93
+#define STAGE_WIDTH  93
+#define CURVE_TOP    19
+#define CURVE_BOTTOM 31
 #define DIGIT_PITCH 7 // the label font's digits are 6 wide
 
 // The real tip temperature in the label font with the ring, the arrow in front of it: >0 up, <0 down
@@ -103,10 +105,13 @@ static void drawTempBlockAt(int16_t x, uint16_t value, int8_t arrow) {
 
 static void drawTempBlock(uint16_t value, int8_t arrow) { drawTempBlockAt(blockX(), value, arrow); }
 
-// The tiny line under the temperature, right aligned under the ring
-static void drawUnderTemp(const char *text) {
+// The tiny line under the temperature, right aligned under the ring, with a check mark in front if asked
+static void drawUnderTemp(const char *text, bool check = false) {
   const int16_t right = blockX() + 33, width = dogTextWidth(dogFontTiny, text);
   dogText(dogFontTiny, right - width + 1, 16, text);
+  if (check) {
+    dogBlit(right - width - 6, 11, 5, 8, iconTinyCheck);
+  }
 }
 
 // The legs: frames advance at fpsX10 / 10 a second, from the time and not the frame rate of the screen
@@ -184,7 +189,7 @@ static void drawBoostScreen() {
 }
 
 /*
- * Soldering, from the moment Start is left: one screen, heating, cooling or ready, the same both ways up (the panel turns the picture).
+ * Heating, from the moment Start is left until the set point is reached, and again after sleep: one screen, heating, cooling or ready, the same both ways up (the panel turns the picture).
  * One big number, everything else small and aligned, no frames and no button hints; holding the rear button still shows the stop
  *   350° v   65 W      350°
  *            3,2 A     BLEIFREI
@@ -242,7 +247,7 @@ static uint16_t secondsLeft(int32_t errorC, int32_t rateC) {
   return seconds > ESTIMATE_MAX_S ? 0 : (seconds ? seconds : 1);
 }
 
-static void drawSolderingScreen() {
+static void drawHeatingScreen() {
   const int32_t  errorC = (int32_t)currentTempTargetDegC - (int32_t)TipThermoModel::getTipInC();
   const bool     ready  = errorC > -READY_WITHIN_C && errorC < READY_WITHIN_C;
   const uint16_t tip    = getTipTemp(), set = setPoint();
@@ -301,12 +306,83 @@ static void drawSolderingScreen() {
   }
 }
 
+/*
+ * Soldering, once the set point has been reached: no dog, also not while heating after a change of solder
+ *   Platine bleifrei     v 352°
+ *   65W 3.2A               ZIEL 350°   (2 s after a change: "370° SnCu   . . . # .")
+ *   ---- curve ----------  [ - ][ + ]
+ */
+struct DogSolder {
+  const char *de, *en, *alloy;
+};
+static const DogSolder SOLDERS[] = {
+    {"Empfindlich", "Sensitive", "SnBi"}, {"Platine mit Blei", "Leaded PCB", "SnPb"}, {"Platine bleifrei", "Lead-free PCB", "SAC305"},
+    {"Dicke Pads", "Thick pads", "SnCu"},  {"Kabel + Masse", "Wires + mass", "Max"},
+};
+#define SOLDER_COUNT (sizeof(SOLDERS) / sizeof(SOLDERS[0]))
+#define SOLDER_DOTS_X 54
+
+static void formatTarget(char *out, uint16_t value) {
+  strcpy(out, DOG_T("ZIEL ", "SET "));
+  formatUnit(out + strlen(out), value, "°");
+}
+
+// "65W 3.2A"
+static void formatPower(char *out) {
+  formatUnit(out, wattsNow(), "W ");
+  formatX10(out + strlen(out), ampsX10(), 'A');
+}
+
+static void drawSolderingScreen() {
+  const int16_t  x0     = stageX();
+  const int8_t   solder = dogPresetIndex();
+  const uint16_t tip = getTipTemp(), set = setPoint();
+  dogText(dogFontLabel, x0, 10, solder < 0 ? DOG_T("Eigenes Ziel", "Own target") : (dogLangDE() ? SOLDERS[solder].de : SOLDERS[solder].en));
+  char text[16];
+  if (dogLotChangedAt && xTaskGetTickCount() - dogLotChangedAt < NAME_MARK_TICKS) {
+    formatUnit(text, set, "° ");
+    if (solder >= 0) {
+      strcat(text, SOLDERS[solder].alloy);
+    }
+    dogSmall(x0, text, 19);
+    // At x=54 with a gap of a pixel; "350° SAC305" is too wide for that: behind it and closer together, to stay clear of ZIEL
+    int16_t       dots  = x0 + dogTextWidth(dogFontSmall, text) + 1;
+    const uint8_t pitch = dots > x0 + SOLDER_DOTS_X ? 4 : 5;
+    dots += dots > x0 + SOLDER_DOTS_X ? 1 : 0;
+    dots                = dots < x0 + SOLDER_DOTS_X ? x0 + SOLDER_DOTS_X : dots;
+    for (uint8_t i = 0; i < SOLDER_COUNT; i++) {
+      const int16_t x = dots + i * pitch;
+      if (i == solder) {
+        OLED::drawFilledRect(x, 14, x + 2, 16, false);
+      } else {
+        OLED::drawFilledRect(x + 1, 15, x + 1, 15, false);
+      }
+    }
+  } else {
+    formatPower(text);
+    dogSmall(x0, text, 19);
+  }
+  dogDrawCurveStage(x0, STAGE_WIDTH, CURVE_TOP, CURVE_BOTTOM, currentTempTargetDegC);
+  const int16_t error   = (int16_t)tip - (int16_t)set;
+  const bool    reached = error > -2 && error < 2;
+  drawTempBlock(tip, reached ? 0 : (error < 0 ? 1 : -1));
+  if (reached) {
+    drawUnderTemp(DOG_T("BEREIT", "READY"), true);
+  } else {
+    formatTarget(text, set);
+    drawUnderTemp(text);
+  }
+  dogKeyPair(normal() ? 96 : 0, nullptr, nullptr);
+}
+
 void ui_draw_soldering_basic_status(bool boostModeOn) {
   if (drawStopHold(getTipTemp())) {
     return;
   }
   if (boostModeOn) {
     drawBoostScreen();
+  } else if (!dogSolderTimerStart || dogWokeHeating) {
+    drawHeatingScreen();
   } else {
     drawSolderingScreen();
   }

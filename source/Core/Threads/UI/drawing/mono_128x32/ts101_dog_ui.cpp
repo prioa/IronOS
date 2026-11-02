@@ -7,6 +7,7 @@ TickType_t dogSolderTimerStart = 0;
 uint16_t   dogHeatupStartTempC = 0;
 TickType_t dogReachedUntil     = 0;
 TickType_t dogLotChangedAt     = 0;
+bool       dogWokeHeating      = false;
 uint8_t    dogSleepWakeFrame   = 0;
 uint32_t   dogLastSessionSeconds = 0;
 
@@ -73,7 +74,8 @@ bool dogHandleTooHot() {
 }
 
 // ---- Temperature curve ----
-#define DOG_CURVE_SAMPLES 57 // one a column
+#define DOG_CURVE_SAMPLES 93 // one a column across the soldering screen's stage
+#define DOG_SPARK_SAMPLES 57 // the heating screen's sparkline shows the newest of them
 #define DOG_CURVE_BOTTOM  31
 #define DOG_CURVE_RANGE   8  // rows above the bottom one
 #define DOG_CURVE_MAX_C   420
@@ -113,14 +115,43 @@ static uint8_t curveRow(uint16_t tempC) {
 
 void dogDrawCurve(uint16_t setC) {
   const uint8_t setRow = curveRow(setC);
-  for (uint8_t x = 0; x < DOG_CURVE_SAMPLES; x += 2) {
+  for (uint8_t x = 0; x < DOG_SPARK_SAMPLES; x += 2) {
     OLED::drawFilledRect(x, setRow, x, setRow, false);
   }
-  for (uint8_t back = 0; back < curveCount; back++) {
-    const uint8_t x    = DOG_CURVE_SAMPLES - 1 - back;
+  const uint8_t count = curveCount < DOG_SPARK_SAMPLES ? curveCount : DOG_SPARK_SAMPLES;
+  for (uint8_t back = 0; back < count; back++) {
+    const uint8_t x    = DOG_SPARK_SAMPLES - 1 - back;
     const uint8_t row  = curveRow(curveAt(back));
-    const uint8_t next = back + 1 < curveCount ? curveRow(curveAt(back + 1)) : row; // the older neighbour
+    const uint8_t next = back + 1 < count ? curveRow(curveAt(back + 1)) : row; // the older neighbour
     OLED::drawFilledRect(x, row < next ? row : next, x, row < next ? next : row, false);
+  }
+}
+
+void dogDrawCurveStage(int16_t x0, uint8_t width, uint8_t y0, uint8_t y1, uint16_t setC) {
+  const uint8_t count = curveCount < width ? curveCount : width;
+  // The range follows what is shown and the set point, so the set line moves when the set point does: at least 36 degrees
+  int32_t lo = setC, hi = setC;
+  for (uint8_t back = 0; back < count; back++) {
+    lo = curveAt(back) < lo ? curveAt(back) : lo;
+    hi = curveAt(back) > hi ? curveAt(back) : hi;
+  }
+  lo -= 2;
+  hi += 2;
+  if (hi - lo < 36) {
+    const int32_t middle = (lo + hi) / 2;
+    lo                   = middle - 18;
+    hi                   = middle + 18;
+  }
+  auto toY = [&](int32_t v) -> uint8_t { return y1 - ((v - lo) * (y1 - y0) + (hi - lo) / 2) / (hi - lo); };
+  const uint8_t setY = toY(setC);
+  for (uint8_t i = 0; i < width; i += 3) {
+    OLED::drawFilledRect(x0 + i, setY, x0 + i, setY, false);
+  }
+  // The oldest on the left; neighbours joined with vertical strokes, so steep changes stay visible
+  for (uint8_t i = 0; i < count; i++) {
+    const uint8_t back = count - 1 - i;
+    const uint8_t y = toY(curveAt(back)), prev = i ? toY(curveAt(back + 1)) : y;
+    OLED::drawFilledRect(x0 + i, y < prev ? y : prev, x0 + i, y < prev ? prev : y, false);
   }
 }
 

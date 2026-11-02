@@ -121,6 +121,7 @@ void previewApply(const PreviewScene &s) {
   settings[SettingsOptions::DetailedIDLE]      = s.detailed;
   tipMissing                                   = false;
   dogSolderTimerStart = dogReachedUntil = 0;
+  dogWokeHeating                                 = false;
   settings[SettingsOptions::TotalSolderMinutes]  = 42 * 60 + 17;
   settings[SettingsOptions::TotalSolderSessions] = 214;
   settings[SettingsOptions::TotalBoosts]         = 17;
@@ -282,12 +283,54 @@ static void curve(int start, std::initializer_list<CurveStep> steps) {
   previewTicks = end;
 }
 
-// The screen with the solder last changed this long ago (0: not at all) and the set point reached this long ago (0: not yet)
+// The heating screen with the solder last changed this long ago (0: not at all) and the set point reached this long ago (0: not yet).
+// Once reached the iron shows the soldering screen; the heating screen's ready state is drawn as after sleep, where it stays
 static void solderShot(uint32_t changedMs, uint32_t reachedS) {
   dogLotChangedAt = changedMs ? (previewTicks - changedMs) | 1 : 0;
   if (reachedS) {
     atTemp(reachedS);
+    dogWokeHeating = true;
   }
+  ui_draw_soldering_basic_status(false);
+}
+
+// The soldering screen: 93 samples of 0.2 s before the change of solder, then the tip on its way for changedMs
+enum class Series { Set350, Set370, Set240, Set335, Set400, Load };
+static void fillSeries(Series kind) {
+  dogCurveReset();
+  const uint32_t now = previewTicks;
+  for (int i = 0; i < 93; i++) {
+    int t = 350;
+    switch (kind) {
+    case Series::Set350: t = 350 + (i % 23 == 5 ? -1 : 0); break;
+    case Series::Set370: t = 370 + (i % 23 == 5 ? -1 : 0); break;
+    case Series::Set240: t = 240; break;
+    case Series::Set335: t = 335; break;
+    case Series::Set400: t = i < 60 ? 400 : 400 - (i - 60) % 8; break;
+    case Series::Load: { // a dip under load and back
+      const int x = i * 78 / 93;
+      const int y = x < 57 ? 0 : x < 58 ? 1 : x < 59 ? 2 : x < 60 ? 3 : x < 61 ? 4 : x < 65 ? 5 : x < 67 ? 4 : x < 69 ? 3 : x < 73 ? 2 : 1;
+      t           = 350 - y * 45 / 7;
+      break;
+    }
+    }
+    previewTicks = now - (92 - i) * 200;
+    dogCurveSample(t, 200);
+  }
+  previewTicks = now;
+}
+static void solderScene(uint16_t tip, uint16_t set, Series kind, uint32_t changedMs) {
+  limitX10           = 650;
+  const uint32_t end = previewTicks;
+  previewTicks       = end - changedMs;
+  fillSeries(kind);
+  for (uint32_t t = 200; t <= changedMs; t += 200) { // after the change the tip is on its way
+    previewTicks = end - changedMs + t;
+    dogCurveSample(tip, 200);
+  }
+  previewTicks = end;
+  atTemp(199);
+  dogLotChangedAt = changedMs ? (previewTicks - changedMs) | 1 : 0;
   ui_draw_soldering_basic_status(false);
 }
 
@@ -373,6 +416,23 @@ std::vector<PreviewScene> previewScenes() {
       {"n9b_lange_zeit", T, 400, 400, 1000, 201, false, [] { curve(400, {{430, 28}, {400, 28}}); solderShot(0, 7425); }},
       {"n9c_ziffer_9", T, 199, 350, 650, 201, false, [] { heating170(); }},
       {"n10_fahrenheit", T, 170, 660, 650, 201, false, [] { settings[SettingsOptions::TemperatureInF] = 1; currentTempTargetDegC = 349; heating170(); settings[SettingsOptions::TemperatureInF] = 0; }},
+      // Soldering with the choice of solder, once the set point was reached: no dog, also not while heating after a change
+      {"l1_bereit_350", T, 350, 350, 90, 201, false, [] { solderScene(350, 350, Series::Set350, 0); }},
+      {"l2_plus_370_heizt", T, 352, 370, 650, 201, false, [] { solderScene(352, 370, Series::Set350, 300); }},
+      {"l3_bereit_370", T, 370, 370, 120, 201, false, [] { solderScene(370, 370, Series::Set370, 0); }},
+      {"l4_minus_350_kuehlt", T, 368, 350, 0, 201, false, [] { solderScene(368, 350, Series::Set370, 400); }},
+      {"l5_platine_bleifrei_heizt", T, 341, 350, 650, 201, false, [] { solderScene(341, 350, Series::Load, 0); }},
+      {"l6_platine_bleifrei_wechsel", T, 341, 350, 650, 201, false, [] { solderScene(341, 350, Series::Load, 500); }},
+      {"l7_empfindlich_wechsel", T, 240, 240, 60, 201, false, [] { solderScene(240, 240, Series::Set240, 900); }},
+      {"l7b_mit_blei_wechsel", T, 300, 320, 650, 201, false, [] { solderScene(300, 320, Series::Set350, 900); }},
+      {"l7c_dicke_pads_wechsel", T, 355, 370, 650, 201, false, [] { solderScene(355, 370, Series::Set350, 900); }},
+      {"l7d_kabel_masse_wechsel", T, 380, 400, 650, 201, false, [] { solderScene(380, 400, Series::Set370, 900); }},
+      {"l7e_wechsel_vorbei", T, 370, 370, 120, 201, false, [] { solderScene(370, 370, Series::Set350, 2100); }},
+      {"l8_kabel_masse", T, 400, 400, 200, 201, false, [] { solderScene(400, 400, Series::Set400, 0); }},
+      {"l9_eigenes_ziel_335", T, 335, 335, 80, 201, false, [] { solderScene(335, 335, Series::Set335, 0); }},
+      {"l10_gedreht", T, 350, 350, 90, 201, false, [] { orient(false); solderScene(350, 350, Series::Set350, 0); }},
+      {"l11_minus_gedrueckt", T, 350, 350, 90, 201, false, [] { pressed(false, 100); solderScene(350, 350, Series::Set350, 0); }},
+      {"l12_plus_gedrueckt", T, 350, 350, 90, 201, false, [] { pressed(true, 100); solderScene(350, 350, Series::Set350, 0); }},
       // Boost: the dog sprints, the ground runs to the left
       {"b1_boost", 209000, 400, 350, 650, 201, false, [] { boostScene(23); }},
       {"b1_boost_bild1", 209025, 400, 350, 650, 201, false, [] { boostScene(23); }},

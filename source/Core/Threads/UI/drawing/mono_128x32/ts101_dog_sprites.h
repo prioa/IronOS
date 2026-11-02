@@ -46,6 +46,7 @@ extern const uint8_t dogTrot0[];
 extern const uint8_t dogTrot1[];
 extern const uint8_t dogTrot2[];
 extern const uint8_t dogTrot3[];
+extern const uint8_t iconTinyCheck[];
 extern const uint8_t iconBoltSmall[];
 extern const uint8_t dogTrendDown[];
 extern const uint8_t dogTrendUp[];

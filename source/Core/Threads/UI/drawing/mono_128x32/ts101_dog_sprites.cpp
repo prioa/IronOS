@@ -279,6 +279,11 @@ const uint8_t dogTrot3[] = {
 };
 
 // 5x8
+const uint8_t iconTinyCheck[] = {
+  0x04, 0x08, 0x04, 0x02, 0x01,
+};
+
+// 5x8
 const uint8_t iconBoltSmall[] = {
   0x04, 0x6E, 0x3F, 0x1D, 0x08,
 };
