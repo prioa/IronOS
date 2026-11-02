@@ -200,6 +200,19 @@ static void runFrames(int frames) {
   }
 }
 
+// The iron at rest with this reading of the sensor, for poses setAngle can't give (lying flat, on its side)
+static void holdAccel(int16_t x, int16_t y, int16_t z) {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - 40 * 125;
+  dogHomeMotionReset();
+  setAccel(x, y, z);
+  dogHomeMotionUpdate();
+  previewTicks = end;
+  for (int i = 0; i < 40; i++) {
+    previewTicks = end - (39 - i) * 125;
+    dogHomeMotionUpdate();
+  }
+}
 static void holdAtAngle(int degrees) {
   const uint32_t end = previewTicks;
   previewTicks       = end - 40 * 125;
@@ -269,12 +282,13 @@ static void home() {
   ui_draw_homescreen_simplified(tipC);
 }
 
-static void homeStatistics(uint16_t minutesTotal, uint16_t counts, uint16_t session) {
+// The figure on top follows the tilt: level GESAMT, 12 degrees right SEIT START, 12 left VORGÄNGE, 30 left BOOSTS
+static void homeStatistics(uint16_t minutesTotal, uint16_t counts, uint16_t session, int degrees = 0) {
   settings[SettingsOptions::TotalSolderMinutes] = minutesTotal;
   settings[SettingsOptions::TotalSolderSessions] = settings[SettingsOptions::TotalBoosts] = counts;
   dogSessionMinutes = session;
   feedHistory(HomeCurve::Heating, 350); // the widest temperature and the arrow: the tightest the top row gets
-  calm();
+  holdAtAngle(degrees);
   ui_draw_homescreen_simplified(350);
 }
 
@@ -440,6 +454,11 @@ std::vector<PreviewScene> previewScenes() {
       {"v5_kolben_rechts40", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 40); }},
       {"v5_kolben_spitze_unten", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 60); }},
       {"v5_kolben_heiss_f", H0, 320, 350, 0, 201, false, [] { settings[SettingsOptions::TemperatureInF] = 1; handleX10 = 410; viewShot(4, 0); settings[SettingsOptions::TemperatureInF] = 0; }},
+      {"v5_kolben_flach", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 0); holdAccel(0, 0, 8000); for (int i = 0; i < 12; i++) { OLED::clearScreen(); ui_draw_homescreen_simplified(24); } }},
+      {"v5_kolben_seite_a", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 0); holdAccel(0, 5657, 5657); for (int i = 0; i < 12; i++) { OLED::clearScreen(); ui_draw_homescreen_simplified(24); } }},
+      {"v5_kolben_seite_b", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 0); holdAccel(0, -5657, 5657); for (int i = 0; i < 12; i++) { OLED::clearScreen(); ui_draw_homescreen_simplified(24); } }},
+      {"v5_kolben_flach_spitze_runter", H0, 24, 350, 0, 201, false, [] { handleX10 = 220; viewShot(4, 0); holdAccel(4000, 0, 6928); for (int i = 0; i < 12; i++) { OLED::clearScreen(); ui_draw_homescreen_simplified(24); } }},
+      {"h11_flach", H0, 26, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cold, 26); holdAccel(0, 0, 8000); for (int i = 0; i < 12; i++) { OLED::clearScreen(); ui_draw_homescreen_simplified(26); } }},
       {"v5_kolben_gedreht", H0, 24, 350, 0, 201, false, [] { orient(false); handleX10 = 220; viewShot(4, 0); }},
       // Soldering: one screen, heating, cooling or ready
       {"n1_aufheizen_170", T, 170, 350, 650, 201, false, [] { heating170(); }},
@@ -486,14 +505,14 @@ std::vector<PreviewScene> previewScenes() {
       {"b2_boost_gedreht", 209000, 400, 350, 650, 201, false, [] { orient(false); boostScene(23); }},
       {"h6_umgedreht", H0, 26, 350, 0, 201, false, [] { orient(false); home(); }},
       {"h8_gesamt_max", H0, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
-      {"h8_seit_start_38", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 38); }},
-      {"h8_seit_start_100", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 100); }},
-      {"h8_seit_start_999", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
-      {"h8_seit_start_max", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 59940); }},
-      {"h8_vorgaenge_9999", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 9999, 999); }},
-      {"h8_vorgaenge_max", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
-      {"h8_boosts_max", H0 + 6000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999); }},
-      {"h8_umgedreht_vorgaenge_9999", H0 + 4000, 350, 350, 0, 201, false, [] { orient(false); homeStatistics(65534, 9999, 999); }},
+      {"h8_seit_start_38", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 38, 12); }},
+      {"h8_seit_start_100", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 100, 12); }},
+      {"h8_seit_start_999", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999, 12); }},
+      {"h8_seit_start_max", H0 + 2000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 59940, 12); }},
+      {"h8_vorgaenge_9999", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 9999, 999, -12); }},
+      {"h8_vorgaenge_max", H0 + 4000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999, -12); }},
+      {"h8_boosts_max", H0 + 6000, 350, 350, 0, 201, false, [] { homeStatistics(65534, 65534, 999, -30); }},
+      {"h8_umgedreht_vorgaenge_9999", H0 + 4000, 350, 350, 0, 201, false, [] { orient(false); homeStatistics(65534, 9999, 999, 12); }},
       {"h9_runter", H0, 180, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cooling, 180); calm(); ui_draw_homescreen_simplified(180); }},
       {"h9_runter_wippt", H0 + 500, 180, 350, 0, 201, false, [] { feedHistory(HomeCurve::Cooling, 180); calm(); ui_draw_homescreen_simplified(180); }},
       {"h9_hoch", H0, 200, 350, 0, 201, false, [] { feedHistory(HomeCurve::Heating, 200); calm(); ui_draw_homescreen_simplified(200); }},

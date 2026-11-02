@@ -62,13 +62,20 @@ def is_pose(name, pose, origin=0, drop=0):
     check(dog(name, origin) == expected, f'{name}: {pose}' + (f', {drop} px down' if drop else ''))
 
 normal, turned = load('h1_ruhig'), load('h6_umgedreht')
-check(area(normal, 96, 127, 17, 31) == pair(96, True), 'normal: frame 96-127 x 17-31, boxes 98-110 and 113-125 x 19-29, sliders at (100,21), play at (118,21)')
-check(area(turned, 0, 31, 17, 31) == pair(0, False), 'turned: the pair on the left, play in the left box next to the front button, icons not mirrored')
-inside = {(x, y) for x in range(99, 110) for y in range(20, 29)}
-check(area(load('h10_hinten_gedrueckt'), 99, 109, 20, 28) == inside - moved(sliders, 100, 21), 'rear pressed: the inside of its box inverted')
+def fill(x0, x1, y0, y1):
+    return {(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)}
+def keys(x, menu_right):
+    menu = rect(x, 19, x + 6, 23) | (fill(x + 3, x + 6, 19, 23) if menu_right else fill(x, x + 3, 19, 23))
+    start = rect(x, 26, x + 6, 30) | (fill(x, x + 3, 26, 30) if menu_right else fill(x + 3, x + 6, 26, 30))
+    return menu | start
+check(area(normal, 121, 127, 17, 31) == keys(121, False), 'normal: two small keys at x=121, MENU on y=19-23 filled on the rear side, START on y=26-30 filled towards the tip')
+check(area(turned, 0, 6, 17, 31) == keys(0, True), 'turned: the keys on the left, the filled halves swapped with the buttons')
+check(max(x for x, y in area(normal, 96, 120, 19, 30)) == 117 and min(y for x, y in area(normal, 96, 120, 19, 30)) == 19, 'MENU and START end at x=117, from y=19')
+pressed = load('h10_hinten_gedrueckt')
+check(area(pressed, 122, 126, 20, 22) == fill(122, 126, 20, 22) - fill(122, 124, 20, 22), 'rear pressed: the inside of the MENU key inverted')
+check(area(normal, 33, 66, 13, 31) and not area(normal, 32, 32), 'the small iron lies under the statistics from x=33, a column clear of the head')
 is_pose('h1_ruhig', 'front')
 is_pose('h6_umgedreht', 'front', 96)
-check(not area(normal, 32, 36), 'nothing between the dog and the statistics')
 # GAZE[0..4]: both turned poses in the header look the same way, the other side is them mirrored
 def mirrored(pixels):
     return {(31 - x, y) for x, y in pixels}
@@ -113,14 +120,21 @@ check(moved(arrow_down, 94, 2) <= down and moved(arrow_down, 94, 3) <= down2, 'a
 check(moved(arrow_up, 94, 2) <= load('h9_hoch'), 'arrow up: y=2')
 check(not area(normal, 94, 100, 3, 8), 'no arrow at a steady temperature')
 
+# Right of the small iron (and its black edge) the curve shows as it is
 curve = load('h1_ruhig')
-dots = {(x, 23) for x in range(37, 92, 4)}
-check(area(curve, 37, 91, 23, 23) == dots, 'dotted base line: every 4th pixel from x=37')
-columns = {x for x, y in area(curve, 37, 91, 12, 21)}
-check(columns == set(range(37, 92)), 'the curve fills all 55 columns after 10 minutes')
-check(all(12 <= y <= 21 for x, y in area(curve, 37, 91, 10, 22)), 'the curve stays on rows 12-21')
-rows = {x: [y for xx, y in area(curve, 37, 91, 12, 21) if xx == x] for x in columns}
-check(all(min(rows[a]) <= max(rows[a + 1]) + 1 and min(rows[a + 1]) <= max(rows[a]) + 1 for a in range(37, 91)), 'neighbouring columns join without a gap')
+dots = {(x, 23) for x in range(37, 92, 4) if x >= 69}
+check(area(curve, 69, 91, 23, 23) == dots, 'dotted base line: every 4th pixel from x=37')
+columns = {x for x, y in area(curve, 69, 91, 12, 21)}
+check(columns == set(range(69, 92)), 'the curve fills its columns after 10 minutes')
+check(all(12 <= y <= 21 for x, y in area(curve, 69, 91, 10, 22)), 'the curve stays on rows 12-21')
+rows = {x: [y for xx, y in area(curve, 69, 91, 12, 21) if xx == x] for x in columns}
+check(all(min(rows[a]) <= max(rows[a + 1]) + 1 and min(rows[a + 1]) <= max(rows[a]) + 1 for a in range(69, 91)), 'neighbouring columns join without a gap')
+
+# The figure on top follows the tilt
+def label_is(name, word_px):
+    return area(load(name), 37, 37 + word_px, 3, 7)
+check(label_is('h8_gesamt_max', 22) != label_is('h8_seit_start_38', 22) != label_is('h8_vorgaenge_9999', 22) != label_is('h8_boosts_max', 22), 'level, right, left and far left show four different figures')
+check(label_is('h1_ruhig', 22) == label_is('h8_gesamt_max', 22), 'level: GESAMT')
 
 print(f'{len(failures)} failed')
 sys.exit(1 if failures else 0)

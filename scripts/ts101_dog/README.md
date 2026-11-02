@@ -33,10 +33,15 @@ into reference images for `preview/compare.py`.
   an empty hourglass with the lifetime hours: the iron knows no lifetime of a tip), `Schäfer` (tip and grip small on the left, a German Shepherd
   trotting in, wagging, sitting and leaving in a loop of 12 s: seven sprites in `art/home.txt`, `preview/check_views.py` compares it with
   frames of the design in `preview/design/`), `Abkühlen` (the large temperature, `HANDWARM IN n MIN` from how fast the tip cooled towards the grip's
-  temperature over the last 55 s, the last 10 minutes above the 50 C line) and `Kolben` (the iron drawn from its profile, the display window,
-  button and cable turning with the tilt, tip down with the tip down, wobbling when shaken; the temperatures at the tip and above the grip in
-  the unit of the setting). The design renders the iron in 3D with a depth buffer at 4x4 supersampling, far beyond the 20K of RAM: the firmware
+  temperature over the last 55 s, the last 10 minutes above the 50 C line) and `Kolben` (the iron drawn from its profile as it lies, from the sensor alone:
+  its long axis tilts with the real one, drawn smaller when tilted so it stays on the screen; turning it about that axis moves the display
+  window and button; the cable hangs down; the tip on the side of the real tip; the temperatures beyond the tip and over the grip, wherever
+  there is room, in the unit of the setting). `DOG_ACCEL_ACROSS`, `DOG_ACCEL_NORMAL` and `DOG_ACCEL_TURN_SIGN` in `ts101_dog_home.cpp` are
+  **not yet checked on the iron**: the last raw values page (Info, System, front) shows X, Y, Z and the tilt and turn worked out from them. The design renders the iron in 3D with a depth buffer at 4x4 supersampling, far beyond the 20K of RAM: the firmware
   draws it column by column instead.
+- **Home** (the dog view, after the design's Home final): the figure on top follows the tilt like a lenticular print (far left BOOSTS, left
+  VORGÄNGE, level GESAMT, right SEIT START; near a threshold both show, row by row), two small keys in the corner with MENU and START, the
+  one meant filled, and a small iron under the statistics lying as the real one does.
 - **Dog**: 32x32 poses from `art/ts101_home_assets.h`, the source of truth; `make_home_assets.py` converts them and leaves out the unused `EYES_*`. 8 frames a
   second: five gaze steps (the two `TURN_*` poses, each also mirrored at draw time, and `FRONT`), target `round(clamp(-roll / 22, -1, 1) * 2) + 2`, at most one step
   every 2 frames. Shaken it lays its ears back and hops, then cocks its head for 5 frames; tip down it looks up; in the middle step it blinks every 6-8 s and shows

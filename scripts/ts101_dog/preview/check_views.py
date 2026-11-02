@@ -41,9 +41,17 @@ cool = load('v4_abkuehlen')
 check(area(cool, 36, 127, 30, 30) == {(x, 30) for x in range(36, 128, 3)}, 'Abkühlen: the 50 C line dotted every 3rd pixel from x=36')
 for name in ('v5_kolben', 'v5_kolben_links20', 'v5_kolben_rechts20', 'v5_kolben_rechts40'):
     img = load(name)
-    check(len(img) > 300 and area(img, 0, 127, 31, 31) == {(x, 31) for x in range(0, 128, 2)}, name + ': the iron drawn, the dotted ground at y=31')
-check(load('v5_kolben_links20') != load('v5_kolben_rechts20'), 'Kolben: the display turns with the tilt')
-check(load('v5_kolben') != load('v5_kolben_spitze_unten'), 'Kolben: tip down tilts the iron')
+    check(len(img) > 100 and area(img, 0, 127, 31, 31) == {(x, 31) for x in range(0, 128, 2)}, name + ': the iron drawn, the dotted ground at y=31')
+# The lie comes from the sensor: turning about the long axis moves the display window, tilting the long axis tilts the drawing
+window = lambda name: area(load(name), 40, 80, 0, 30)
+check(window('v5_kolben_flach') != window('v5_kolben_seite_a') != window('v5_kolben_seite_b'), 'Kolben: flat, on one side and on the other the display shows differently')
+def ends(name):  # the lowest row of the iron at its left and right quarter
+    img = area(load(name), 0, 127, 0, 30)
+    left = [y for x, y in img if 20 <= x <= 40]
+    right = [y for x, y in img if 87 <= x <= 107]
+    return (max(left) if left else 0), (max(right) if right else 0)
+check(ends('v5_kolben_flach_spitze_runter')[1] > ends('v5_kolben_flach_spitze_runter')[0], 'Kolben: tip down, the tip end (right) is lower')
+check(ends('v5_kolben_links20')[1] < ends('v5_kolben_links20')[0], 'Kolben: tip up, the tip end is higher')
 
 print(f'{len(failures)} failed')
 sys.exit(1 if failures else 0)

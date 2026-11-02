@@ -21,6 +21,7 @@ char *dogFormatTime(char *out, uint16_t major, uint8_t minor); // major:mm
 
 // OR a sprite (page format, height a multiple of 8) onto the screen at any position, keeping what is under it
 void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *data);
+extern uint32_t dogBlitRows; // a bit per screen row: dogBlit only draws on the rows that are set (all, unless a screen interlaces two pictures)
 // Full screen notice: 24x24 icon on the left, big word, below it what it means
 void dogDrawNotice(const uint8_t *icon, const char *word, const char *footer);
 // Lock notices with the same look as warnUser: true when they should end
@@ -109,7 +110,10 @@ void dogCountBoost();                        // a boost started; saved on the ho
 #define DOG_HOME_VIEWS 5
 void     dogDrawHomeView(uint8_t view, uint16_t shownTemperature);
 void     dogDrawHomeHead(int16_t x); // the dog's head as on the home screen, following the sensor
+void     dogDrawSmallIron();         // the small iron of the home screen, lying as the real one does
 int16_t  dogHomeRollDeg();           // the tilt as the viewer sees it, positive with the left side down
+int16_t  dogHomeAlongDeg();          // the long axis against the horizon, positive with the tip down
+int16_t  dogHomeTurnDeg();           // the turn about the long axis: 0 board up, +-90 on its side, +-180 board down
 bool     dogHomeTipDown();
 bool     dogHomeShaking();
 int8_t   dogHomeTrend(); // the arrow next to the temperature: 1 up, -1 down, 0 none

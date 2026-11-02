@@ -3,14 +3,43 @@
 #include "ui_drawing.hpp"
 
 #ifdef TS101_DOG_UI
+// One more page after the stock ones: the sensor's three axes and the lie of the iron worked out from them, to check the axes on the iron
+#define RAW_PAGES 17
+static void drawLie() {
+  char text[24];
+  auto put = [&](int16_t x, uint8_t base, const char *label, int16_t value) {
+    char *end = text;
+    strcpy(end, label);
+    end += strlen(end);
+    if (value < 0) {
+      *end++ = '-';
+      value  = -value;
+    }
+    dogFormat(end, value);
+    dogSmall(x, text, base);
+  };
+  // X -16384  Y -16384 / Z -16384  LAGE / LÄNGS -40 DREH -180
+  put(0, 7, "X ", dogAccelRaw[0]);
+  put(60, 7, "Y ", dogAccelRaw[1]);
+  put(0, 16, "Z ", dogAccelRaw[2]);
+  dogSmallRight(OLED_WIDTH - 1, DOG_T("LAGE", "LIE"), 16);
+  dogHomeMotionUpdate();
+  put(0, 25, DOG_T("LÄNGS ", "ALONG "), dogHomeAlongDeg());
+  put(66, 25, DOG_T("DREH ", "TURN "), dogHomeTurnDeg());
+}
+
 // The raw values behind the last info page. State 1 = which one
 static OperatingMode showRawValues(const ButtonState buttons, guiContext *cxt) {
   uint16_t &value = cxt->scratch_state.state1;
-  ui_draw_debug_menu(value);
+  if (value == RAW_PAGES - 1) {
+    drawLie();
+  } else {
+    ui_draw_debug_menu(value);
+  }
   if (buttons == BUTTON_F_SHORT) {
-    value = (value + 1) % 16;
+    value = (value + 1) % RAW_PAGES;
   } else if (buttons == BUTTON_B_SHORT) {
-    value = (value + 15) % 16;
+    value = (value + RAW_PAGES - 1) % RAW_PAGES;
   } else if (buttons == BUTTON_BOTH || dogHoldDone(false, DOG_HOLD_FULL)) {
     dogPressConsumed();
     cxt->transitionMode = TransitionAnimation::Left;

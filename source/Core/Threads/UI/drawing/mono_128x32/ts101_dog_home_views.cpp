@@ -3,8 +3,9 @@
  *   1 Symbole:     the dog's head, then a thermometer, a clock and an hourglass with their values and names below
  *   2 Schäferhund: tip and grip temperature small on the left, the rest is a German Shepherd trotting in, wagging, sitting, leaving
  *   3 Abkühlen:    the dog's head, the large temperature with its arrow, when the tip will be hand warm, the last 10 minutes
- *   4 Kolben:      the iron as it lies in the hand, the tip and grip temperatures where they belong
- * Turned the other way round, the head moves to the other side; the shepherd's screen stays as it is, the iron is mirrored.
+ *   4 Kolben:      the iron as it lies in the hand, from the sensor alone: its long axis tilts with the iron's, the display, button
+ *                  and cable turn as it turns about that axis; the tip and grip temperatures where they belong
+ * Turned the other way round, the head moves to the other side; the shepherd's screen stays as it is, the iron's tip is where the real one is.
  */
 #include "ts101_dog_ui.hpp"
 #ifdef TS101_DOG_UI
@@ -271,7 +272,7 @@ static void drawCooling(uint16_t shown) {
   }
 }
 
-// ---- 4 Kolben ----
+// ---- 4 Kolben, and the small iron of the home screen ----
 // The iron along its axis in 1/256 of the model's units: end cap, joint, grip with the display, joint, neck, joint, tip
 struct Ring {
   int16_t u, r;
@@ -279,16 +280,14 @@ struct Ring {
 };
 static const Ring PROFILE[] = {{-1267, 102, false}, {-1152, 113, true}, {-1062, 128, false}, {-998, 143, true}, {486, 143, true}, {563, 128, true}, {640, 108, false},
                                {819, 87, true},     {896, 61, false},   {998, 41, true},     {1331, 18, true}, {1459, 0, true}};
-#define IRON_PX_X100   853 // pixels a unit x 100
-#define IRON_THICK_X100 115
+#define PROFILE_RINGS  (sizeof(PROFILE) / sizeof(PROFILE[0]))
 #define IRON_SHIFT     192 // the axis is moved this far towards the cap, so the iron sits in the middle
-#define IRON_CY        15
-#define IRON_ELEVATION 30 // the iron is seen from above at this angle
-#define IRON_PITCH_DOWN 22
+#define IRON_ELEVATION 30  // the iron is seen from in front and above at this angle
+#define IRON_TILT_MAX  40 // steeper, the long iron would leave the screen
 
 // The radius at u, 0 in a joint or beyond the ends
 static int32_t radiusAt(int32_t u) {
-  for (uint8_t i = 1; i < sizeof(PROFILE) / sizeof(PROFILE[0]); i++) {
+  for (uint8_t i = 1; i < PROFILE_RINGS; i++) {
     if (u <= PROFILE[i].u) {
       if (u < PROFILE[i - 1].u || !PROFILE[i].joinsPrevious) {
         return 0;
@@ -299,116 +298,197 @@ static int32_t radiusAt(int32_t u) {
   return 0;
 }
 
-// A strip on the surface between the angles centre-half and centre+half (0 = straight up on the screen, 90 = facing the viewer)
-static void surfaceStrip(int16_t x, int32_t cy, int32_t radius, int32_t centre, int32_t half, bool on) {
+// A strip on the surface between the screen angles centre-half and centre+half (0 = straight up on the screen, 90 = facing the viewer)
+static void surfaceStrip(int16_t x, int32_t cy, int32_t radius, int32_t centre, int32_t half, bool on, int16_t y0, int16_t y1) {
   int32_t a0 = centre - half, a1 = centre + half;
   a0 = a0 < 1 ? 1 : a0;
   a1 = a1 > 179 ? 179 : a1;
   if (a0 >= a1) {
     return; // on the far side
   }
-  const int32_t y0 = cy - radius * icos(a0) / 1024, y1 = cy - radius * icos(a1) / 1024;
-  OLED::drawFilledRect(x, y0, x, y1 > y0 ? y1 : y0, !on);
+  int32_t top = cy - radius * icos(a0) / 1024, bottom = cy - radius * icos(a1) / 1024;
+  top    = top < y0 ? y0 : top;
+  bottom = bottom > y1 ? y1 : bottom;
+  if (top <= bottom) {
+    OLED::drawFilledRect(x, top, x, bottom, !on);
+  }
 }
 
-static void drawIronAt(int32_t rollDeg, int32_t pitchDeg, bool mirror, int16_t &tipX, int16_t &tipY, int16_t &gripX, int16_t &gripTop, int16_t &gripBottom) {
-  const int32_t cp = icos(pitchDeg), sp = isin(pitchDeg), ce = icos(IRON_ELEVATION);
-  const int32_t facing = 90 + rollDeg; // the display's angle on the screen: at rest it faces the viewer
-  auto screenX = [&](int32_t along) -> int16_t { // along the axis, in 1/256 units from the middle
-    const int32_t px = OLED_WIDTH / 2 - along * cp / 1024 * IRON_PX_X100 / 100 / 256;
-    return mirror ? OLED_WIDTH - 1 - px : px;
-  };
-  gripTop = OLED_HEIGHT;
-  gripBottom = 0;
-  for (int16_t col = 0; col < OLED_WIDTH; col++) {
-    const int32_t dx = mirror ? col - (OLED_WIDTH / 2 - 1) : OLED_WIDTH / 2 - col;
-    const int32_t along = dx * 100 * 256 / IRON_PX_X100 * 1024 / (cp ? cp : 1);
-    const int32_t u = along - IRON_SHIFT;
-    const int32_t r = radiusAt(u) * IRON_THICK_X100 / 100 * IRON_PX_X100 / 100 / 256; // pixels
-    if (u < PROFILE[0].u || u > PROFILE[sizeof(PROFILE) / sizeof(PROFILE[0]) - 1].u) {
-      continue;
-    }
-    const int32_t cy = IRON_CY - along * sp / 1024 * ce / 1024 * IRON_PX_X100 / 100 / 256;
-    if (radiusAt(u) == 0) {
-      continue; // a joint: dark
-    }
-    const int32_t h = r < 1 ? 0 : r;
-    OLED::drawFilledRect(col, cy - h, col, cy + h, false);
-    if (u >= -691 && u <= 38) { // the display window, the display inside it
-      surfaceStrip(col, cy, h, facing, 25, false);
-      if (u >= -627 && u <= -26) {
-        surfaceStrip(col, cy, h, facing, 8, true);
+struct IronBox {
+  int16_t x0, y0, w, h;
+  int16_t pxX100;    // pixels a unit x 100
+  int16_t thickX100; // the iron drawn this much thicker than it is
+};
+struct IronMarks {
+  int16_t tipX, tipY, gripX, gripTop, gripBottom;
+};
+// Where the iron was drawn, column by column, so the temperatures can find a free place: top > bottom = nothing there
+static int8_t ironTop[OLED_WIDTH], ironBottom[OLED_WIDTH];
+
+// The iron as it lies: tilt is its long axis against the horizon (tip down positive), turn the turn about it (0 board up, 90 on its
+// side towards the viewer). The tip points right or left; a black pixel around it keeps it clear of what is behind
+static IronMarks drawIronIn(const IronBox &box, int32_t tilt, int32_t turn, bool tipRight) {
+  const int32_t ct = icos(tilt), st = isin(tilt), ce = icos(IRON_ELEVATION), dir = tipRight ? 1 : -1;
+  const int16_t cx = box.x0 + box.w / 2, cy0 = box.y0 + box.h / 2, last = box.y0 + box.h - 1;
+  const int32_t facing = turn + IRON_ELEVATION; // where the display is on the screen, 90 = facing the viewer
+  IronMarks     marks  = {cx, cy0, cx, (int16_t)last, box.y0};
+  // Tilted, the iron is drawn smaller so its ends stay inside the box; the angle stays the real one
+  const int32_t reach = PROFILE[PROFILE_RINGS - 1].u + IRON_SHIFT; // the tip, the farthest from the middle
+  const int32_t drop  = reach * (st < 0 ? -st : st) / 1024 * ce / 1024;
+  int32_t       px100 = box.pxX100;
+  if (drop) {
+    const int32_t fit = (int32_t)(box.h / 2 - 3) * 100 * 256 / drop;
+    px100             = fit < px100 ? fit : px100;
+  }
+  auto alongToPx = [&](int32_t along) { return along * px100 / 100 / 256; };
+  memset(ironTop, OLED_HEIGHT, sizeof(ironTop));
+  memset(ironBottom, -1, sizeof(ironBottom));
+  for (uint8_t pass = 0; pass < 2; pass++) { // first the black outline, then the iron
+    for (int16_t col = box.x0; col < box.x0 + box.w; col++) {
+      const int32_t along = (int32_t)(col - cx) * dir * 100 * 256 / px100 * 1024 / ct;
+      const int32_t u     = along - IRON_SHIFT;
+      const int32_t r     = radiusAt(u);
+      if (!r) {
+        continue; // beyond the ends, or a joint: dark
       }
-    } else if (u >= 141 && u <= 243) { // the button
-      surfaceStrip(col, cy, h, facing, 18, false);
-    }
-    if (u >= -400 && u <= -200) { // where the grip's temperature goes
-      gripTop    = cy - h < gripTop ? cy - h : gripTop;
-      gripBottom = cy + h > gripBottom ? cy + h : gripBottom;
-      gripX      = col;
+      const int32_t h  = r * box.thickX100 / 100 * px100 / 100 / 256;
+      const int32_t cy = cy0 + alongToPx(along * st / 1024 * ce / 1024);
+      int32_t       y0 = cy - h - (pass ? 0 : 1), y1 = cy + h + (pass ? 0 : 1);
+      y0               = y0 < box.y0 ? box.y0 : y0;
+      y1               = y1 > last ? last : y1;
+      if (y0 > y1) {
+        continue;
+      }
+      if (!pass) {
+        OLED::drawFilledRect(col > box.x0 ? col - 1 : col, y0, col + 1 < box.x0 + box.w ? col + 1 : col, y1, true);
+        continue;
+      }
+      OLED::drawFilledRect(col, y0, col, y1, false);
+      ironTop[col]    = y0;
+      ironBottom[col] = y1;
+      if (u >= -691 && u <= 38) { // the display window, the display inside it
+        surfaceStrip(col, cy, h, facing, 25, false, y0, y1);
+        if (u >= -627 && u <= -26) {
+          surfaceStrip(col, cy, h, facing, 8, true, y0, y1);
+        }
+      } else if (u >= 141 && u <= 243) { // the button
+        surfaceStrip(col, cy, h, facing, 18, false, y0, y1);
+      }
+      if (u >= -400 && u <= -200) { // where the grip's temperature goes
+        marks.gripTop    = y0 < marks.gripTop ? y0 : marks.gripTop;
+        marks.gripBottom = y1 > marks.gripBottom ? y1 : marks.gripBottom;
+        marks.gripX      = col;
+      }
     }
   }
-  tipX = screenX(1459 + IRON_SHIFT);
-  tipY = IRON_CY - (int32_t)(1459 + IRON_SHIFT) * sp / 1024 * ce / 1024 * IRON_PX_X100 / 100 / 256;
-  // The cable from the end cap, hanging down; it turns with the roll
-  const int32_t cr = icos(rollDeg - 30), sr = isin(rollDeg - 30), se = isin(IRON_ELEVATION); // the design rests the iron rolled by -30
+  const int32_t tipAlong = PROFILE[PROFILE_RINGS - 1].u + IRON_SHIFT;
+  marks.tipX             = cx + dir * alongToPx(tipAlong * ct / 1024);
+  marks.tipY             = cy0 + alongToPx(tipAlong * st / 1024 * ce / 1024);
+  // The cable leaves the end cap away from the tip and hangs down
+  const int32_t capAlong = PROFILE[0].u + IRON_SHIFT;
   int16_t       lastX = 0, lastY = 0;
-  for (int32_t s = 0; s <= 16; s++) {
-    const int32_t x  = -1267 - 538 * s / 16 + IRON_SHIFT; // 2.1 units long
-    const int32_t y  = -243 * s * s / 256 * IRON_THICK_X100 / 100; // .95 units down at the end
-    const int32_t y1 = y * cr / 1024, z1 = y * sr / 1024;
-    const int32_t x2 = (x * cp - y1 * sp) / 1024, y2 = (x * sp + y1 * cp) / 1024;
-    const int32_t up = (y2 * ce - z1 * se) / 1024;
-    const int16_t px = screenX(x2), py = IRON_CY - up * IRON_PX_X100 / 100 / 256;
+  for (int32_t s = 0; s <= 12; s++) {
+    const int32_t along = capAlong - 538 * s / 12;                  // 2.1 units out
+    const int32_t droop = 243 * s * s / 144 * box.thickX100 / 100; // and .95 units down at the end
+    const int16_t px = cx + dir * alongToPx(along * ct / 1024), py = cy0 + alongToPx(along * st / 1024 * ce / 1024 + droop);
     if (s) {
       const int16_t steps = (px > lastX ? px - lastX : lastX - px) + (py > lastY ? py - lastY : lastY - py) + 1;
       for (int16_t k = 0; k <= steps; k++) {
-        plot(lastX + (px - lastX) * k / steps, lastY + (py - lastY) * k / steps);
+        const int16_t x = lastX + (px - lastX) * k / steps, y = lastY + (py - lastY) * k / steps;
+        if (x >= box.x0 && x < box.x0 + box.w && y >= box.y0 && y <= last) {
+          plot(x, y);
+        }
       }
     }
     lastX = px;
     lastY = py;
   }
+  return marks;
 }
 
-// A temperature with its unit, a black pixel around it so it stands free of the iron
-static void ironLabel(int16_t centreX, int16_t top, uint16_t value) {
-  char text[10];
+// What the sensor says, eased so single readings don't jump: the tilt of the long axis and the turn about it, both as the viewer sees them
+void dogIronPose(int32_t &tilt, int32_t &turn) {
+  static int32_t shownTilt = 0, shownTurn = 0;
+  dogHomeMotionUpdate();
+  int32_t targetTilt = dogHomeAlongDeg();
+  targetTilt         = targetTilt > IRON_TILT_MAX ? IRON_TILT_MAX : (targetTilt < -IRON_TILT_MAX ? -IRON_TILT_MAX : targetTilt);
+  // Held the other way round, the side towards the viewer is the other one
+  const int32_t targetTurn = normal() ? dogHomeTurnDeg() : -dogHomeTurnDeg();
+  int32_t       turnStep   = targetTurn - shownTurn;
+  turnStep                 = turnStep > 180 ? turnStep - 360 : (turnStep < -180 ? turnStep + 360 : turnStep); // the short way round
+  auto ease = [](int32_t difference) { return difference / 3 ? difference / 3 : (difference > 0) - (difference < 0); };
+  shownTilt += ease(targetTilt - shownTilt);
+  shownTurn += ease(turnStep);
+  shownTurn = shownTurn > 180 ? shownTurn - 360 : (shownTurn < -180 ? shownTurn + 360 : shownTurn);
+  tilt      = shownTilt;
+  turn      = shownTurn;
+}
+
+// The small iron of the home screen, under the statistics; the tip on the side of the real tip
+void dogDrawSmallIron() {
+  static const IronBox SMALL = {33, 13, 34, 19, 288, 190}; // a pixel clear of the head
+  int32_t              tilt, turn;
+  dogIronPose(tilt, turn);
+  IronBox box = SMALL;
+  box.x0      = normal() ? SMALL.x0 : OLED_WIDTH - SMALL.x0 - SMALL.w;
+  drawIronIn(box, tilt, turn, normal());
+}
+
+// The text's box with a pixel around it is on the screen and clear of the iron
+static bool placeFree(int16_t x, int16_t top, int16_t width) {
+  if (x < 1 || x + width > OLED_WIDTH - 1 || top < 1 || top + 8 > 30) {
+    return false;
+  }
+  for (int16_t col = x - 1; col <= x + width; col++) {
+    if (ironTop[col] <= top + 7 && ironBottom[col] >= top - 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// A temperature with its unit at the first free place of up to four, a black pixel around it
+static void ironLabel(const int16_t (*places)[2], uint8_t count, uint16_t value) {
+  char  text[10];
   char *end = dogFormat(text, value);
   strcpy(end, getSettingValue(SettingsOptions::TemperatureInF) ? "°F" : "°C");
   const int16_t width = dogTextWidth(dogFontSmall, text);
-  int16_t       x     = centreX - width / 2;
-  x                   = x < 1 ? 1 : (x + width > OLED_WIDTH - 1 ? OLED_WIDTH - 1 - width : x);
-  top                 = top < 1 ? 1 : (top > OLED_HEIGHT - 9 ? OLED_HEIGHT - 9 : top);
+  int16_t       x = places[0][0], top = places[0][1];
+  for (uint8_t i = 0; i < count; i++) {
+    int16_t px = places[i][0] < 0 ? -places[i][0] - width : places[i][0]; // negative: the right end is given
+    px         = px < 1 ? 1 : (px + width > OLED_WIDTH - 1 ? OLED_WIDTH - 1 - width : px); // pushed back onto the screen
+    if (placeFree(px, places[i][1], width)) {
+      x   = px;
+      top = places[i][1];
+      break;
+    }
+    if (i == 0) {
+      x = px;
+    }
+  }
+  x   = x < 1 ? 1 : (x + width > OLED_WIDTH - 1 ? OLED_WIDTH - 1 - width : x);
+  top = top < 1 ? 1 : (top > 30 - 8 ? 30 - 8 : top);
   OLED::drawFilledRect(x - 1, top - 1, x + width, top + 7, true);
   dogSmall(x, text, top + 7);
 }
 
 static void drawIron(uint16_t shown) {
-  static int32_t roll = 0, pitch = 0; // what is shown, following the sensor smoothly
-  dogHomeMotionUpdate();
-  const int32_t targetRoll = dogHomeRollDeg() > 60 ? 60 : (dogHomeRollDeg() < -60 ? -60 : dogHomeRollDeg());
-  const int32_t targetPitch = dogHomeTipDown() ? -IRON_PITCH_DOWN : 0;
-  auto ease = [](int32_t &value, int32_t target) { // a third of the way each frame, at least a degree
-    const int32_t step = (target - value) / 3;
-    value += step ? step : (target > value) - (target < value);
-  };
-  ease(roll, targetRoll);
-  ease(pitch, targetPitch);
-  int32_t shownRoll = roll, shownPitch = pitch;
-  if (dogHomeShaking()) { // it wobbles, three times a second
-    const int32_t phase = (xTaskGetTickCount() * 1080 / TICKS_SECOND) % 360;
-    shownRoll += 16 * isin(phase) / 1024;
-    shownPitch += 5 * isin(phase * 13 / 10 + 57) / 1024;
-  }
+  static const IronBox FULL = {0, 0, OLED_WIDTH, 30, 853, 115};
+  int32_t              tilt, turn;
+  dogIronPose(tilt, turn);
   for (uint8_t x = 0; x < OLED_WIDTH; x += 2) {
     plot(x, 31);
   }
-  int16_t tipX = 0, tipY = 0, gripX = 0, gripTop = 0, gripBottom = 0;
-  drawIronAt(shownRoll, shownPitch, !normal(), tipX, tipY, gripX, gripTop, gripBottom);
-  // The tip's temperature under the tip, or above it if there is no room; the grip's above the grip, or below it
-  ironLabel(tipX, tipY + 9 <= OLED_HEIGHT - 2 ? tipY + 3 : tipY - 10, shown);
-  ironLabel(gripX, gripTop - 9 >= 1 ? gripTop - 9 : gripBottom + 2, gripTemperature());
+  const bool      tipRight = normal();
+  const IronMarks m        = drawIronIn(FULL, tilt, turn, tipRight);
+  // The tip's temperature beyond the tip, else under or over it; the grip's over the grip, else under it or at the cap's end
+  auto          at     = [](int32_t v) { return (int16_t)v; };
+  const int16_t beyond = at(tipRight ? m.tipX + 3 : -(m.tipX - 2));
+  const int16_t tip[4][2] = {{beyond, at(m.tipY - 3)}, {at(m.tipX - 10), at(m.tipY + 3)}, {at(m.tipX - 10), at(m.tipY - 11)}, {beyond, 1}};
+  ironLabel(tip, 4, shown);
+  const int16_t cap     = at(tipRight ? 1 : -(OLED_WIDTH - 1));
+  const int16_t grip[4][2] = {{at(m.gripX - 12), at(m.gripTop - 9)}, {at(m.gripX - 12), at(m.gripBottom + 2)}, {cap, 1}, {cap, 22}};
+  ironLabel(grip, 4, gripTemperature());
 }
 
 void dogDrawHomeView(uint8_t view, uint16_t shownTemperature) {

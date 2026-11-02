@@ -21,13 +21,15 @@ char *dogFormatTime(char *out, uint16_t major, uint8_t minor) {
   return out;
 }
 
+uint32_t dogBlitRows = 0xFFFFFFFF;
+
 void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *data) {
   for (uint8_t page = 0; page < height / 8; page++) {
     for (uint8_t col = 0; col < width; col++) {
       uint8_t bits = data[page * width + col];
       for (uint8_t bit = 0; bits && bit < 8; bit++) {
         int16_t px = x + col, py = y + page * 8 + bit;
-        if (((bits >> bit) & 1) && px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT) {
+        if (((bits >> bit) & 1) && px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT && ((dogBlitRows >> py) & 1)) {
           OLED::drawFilledRect(px, py, px, py, false);
         }
       }

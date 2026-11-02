@@ -20,6 +20,11 @@
 #define DOG_ACCEL_ALONG_SIGN (+1)
 #define DOG_ROLL_SIGN        (+1)
 #define DOG_SHAKE_X10        16 // a shake: the reading this many tenths of gravity at rest, to tune on the iron
+// Turning the iron about its long axis: the axis across the board and the one through it. From the drivers' orientation (LIS2DH12
+// tells left from right hand by Y), not yet checked on the hardware. The drawn iron turns the wrong way: change DOG_ACCEL_TURN_SIGN
+#define DOG_ACCEL_ACROSS     1
+#define DOG_ACCEL_NORMAL     2
+#define DOG_ACCEL_TURN_SIGN  (+1)
 
 volatile int16_t dogAccelRaw[3] = {0, 0, 0};
 
@@ -125,6 +130,7 @@ static TickType_t shakeUntil    = 0;
 static bool       motionStarted = false, tipDown = false, shaking = false, poseMirrored = false, stepFrame = false;
 static uint8_t    gaze = GAZE_FRONT, gazeTarget = GAZE_FRONT; // steps of GAZE: where the head is, where it is going
 static int16_t    rollDeg = 0;                                // the tilt as the viewer sees it, positive with the left side down
+static int16_t    alongDeg = 0, turnDeg = 0;                  // the long axis against the horizon (tip down +), the turn about it
 static uint8_t    cockFrames = 0, idleFrames = 0, idleGap = 0, tongueGap = 0, hopFrame = 0, hopRow = 0, idleCount = 0;
 static DogPose    idlePose   = DOG_POSE_BLINK;
 static DogPose    pose       = DOG_POSE_FRONT;
@@ -184,6 +190,14 @@ static void readLie(const int32_t raw[3], TickType_t now) {
   const uint32_t length = magnitude(filtered[0] / 16, filtered[1] / 16, filtered[2] / 16);
   const int16_t  angle  = length ? asinDeg(DOG_ACCEL_ALONG_SIGN * filtered[DOG_ACCEL_ALONG] / 16, length) : 0; // positive: tip end down
   tipDown               = angle >= TIP_DOWN_ON || (tipDown && angle >= TIP_DOWN_OFF);
+  alongDeg              = angle;
+  // The turn about the long axis: 0 with the board facing up, +-90 on its side, from the two axes across the iron
+  const int32_t across = filtered[DOG_ACCEL_ACROSS] / 16, through = filtered[DOG_ACCEL_NORMAL] / 16;
+  const uint32_t side   = magnitude(across, through, 0);
+  if (side) {
+    const int16_t a = asinDeg(across, side);
+    turnDeg         = DOG_ACCEL_TURN_SIGN * (through >= 0 ? a : (a >= 0 ? 180 - a : -180 - a));
+  }
   // As the viewer sees it, positive with the left side down. The tip is on the right, or on the left held the other way round.
   // round(clamp(-roll / 22, -1, 1) * 2): full at 22 degrees, a step changes at 5.5 and 16.5
   const int16_t roll  = DOG_ROLL_SIGN * (normal() ? -angle : angle);
@@ -351,42 +365,27 @@ void dogKeyPair(uint8_t x, const uint8_t *front, const uint8_t *rear) {
   }
 }
 
-// Home: one frame, the rear button's box with the sliders, the front button's with the play triangle
-static void drawButtonPair(uint8_t x) {
-  outline(x, 17, x + 31, 31);
-  const bool frontRight = dogFrontOnRight();
-  for (uint8_t i = 0; i < 2; i++) {
-    const bool    isFront = (i == 1) == frontRight;
-    const uint8_t box     = x + 2 + 15 * i;
-    outline(box, 19, box + 12, 29);
-    if (isFront) {
-      dogBlit(box + 5, 21, 4, 8, iconHomePlay);
-    } else {
-      dogBlit(box + 2, 21, 9, 8, iconHomeSliders);
-    }
-    if (dogPressed(isFront)) {
-      OLED::invertRect(box + 1, 20, box + 11, 28);
-    }
-  }
-}
-
-// ---- Statistics ----
-#define STAT_TICKS (TICKS_SECOND * 2)
+// ---- Statistics: like a lenticular print, the tilt picks the figure ----
+// Strongly to the left BOOSTS, slightly left VORGÄNGE, level GESAMT, to the right SEIT START (the iron has no clock for HEUTE).
+// Close to a threshold both figures show, row by row, the rows swapping every frame
+#define KPI_NEAR 3 // degrees either side of a threshold
+static const int8_t KPI_THRESHOLD[3] = {-18, -6, 6};
+enum Kpi : uint8_t { KPI_BOOSTS, KPI_RUNS, KPI_TOTAL, KPI_SESSION };
 
 // The value in its long form, or the short one if the row would run past x=93 (92 turned, where the arrow starts)
-static void drawStatistics(int16_t x) {
+static void drawKpi(int16_t x, Kpi kpi) {
   const uint16_t minutes = dogSessionMinutes;
   const char    *label;
   char           value[10], shortValue[8];
-  switch ((xTaskGetTickCount() / STAT_TICKS) % 4) {
-  case 0: {
+  switch (kpi) {
+  case KPI_TOTAL: {
     const uint16_t hours = getSettingValue(SettingsOptions::TotalSolderMinutes) / 60;
     label                = DOG_T("GESAMT", "TOTAL");
     strcpy(dogFormat(value, hours), " H");
     strcpy(dogFormat(shortValue, hours), "H");
     break;
   }
-  case 1:
+  case KPI_SESSION:
     label = DOG_T("SEIT START", "SESSION"); // since power on: the iron has no clock
     if (minutes < 100) {
       strcpy(dogFormat(value, minutes), " MIN");
@@ -397,7 +396,7 @@ static void drawStatistics(int16_t x) {
       strcpy(dogFormat(shortValue, hours), hours < 100 ? "H" : ""); // behind SEIT START there is room for three characters
     }
     break;
-  case 2: {
+  case KPI_RUNS: {
     const uint16_t runs = getSettingValue(SettingsOptions::TotalSolderSessions);
     label               = DOG_T("VORGÄNGE", "RUNS");
     dogFormat(value, runs);
@@ -416,6 +415,59 @@ static void drawStatistics(int16_t x) {
   const int16_t valueX = x + dogTextWidth(dogFontTiny, label) + 2;
   const int16_t limit  = x + (normal() && trendDirection ? 55 : 56); // a pixel of air before the arrow, when there is one
   dogSmall(valueX, valueX + dogTextWidth(dogFontSmall, value) - 1 > limit ? shortValue : value, 8);
+}
+
+static void drawStatistics(int16_t x) {
+  static uint8_t parity = 0;
+  parity ^= 1;
+  const int16_t tilt = -rollDeg; // negative: tilted to the left
+  uint8_t       kpi  = 0;
+  while (kpi < 3 && tilt >= KPI_THRESHOLD[kpi]) {
+    kpi++;
+  }
+  uint8_t other = kpi;
+  for (uint8_t i = 0; i < 3; i++) {
+    const int16_t off = tilt - KPI_THRESHOLD[i];
+    if (off > -KPI_NEAR && off < KPI_NEAR) {
+      other = kpi == i ? i + 1 : i;
+    }
+  }
+  if (other == kpi) {
+    drawKpi(x, (Kpi)kpi);
+    return;
+  }
+  const uint32_t rows = parity ? 0x55555555 : 0xAAAAAAAA;
+  dogBlitRows         = ~rows;
+  drawKpi(x, (Kpi)kpi);
+  dogBlitRows = rows;
+  drawKpi(x, (Kpi)other);
+  dogBlitRows = 0xFFFFFFFF;
+}
+
+// ---- The buttons: two small keys in the bottom corner, the one meant filled, with what it does ----
+// x0 is where the block starts: words left of the keys normally, right of them turned
+static void miniKey(int16_t x, int16_t y, bool fillRight, bool pressed) {
+  outline(x, y, x + 6, y + 4);
+  OLED::drawFilledRect(fillRight ? x + 3 : x, y, fillRight ? x + 6 : x + 3, y + 4, false);
+  if (pressed) {
+    OLED::invertRect(x + 1, y + 1, x + 5, y + 3);
+  }
+}
+
+static void drawKeyHints() {
+  const bool    frontRight = dogFrontOnRight();
+  const int16_t keyX       = normal() ? OLED_WIDTH - 7 : 0;
+  const char   *menu = DOG_T("MENU", "MENU"), *start = "START";
+  // The rear key sits on the side away from the tip: filled there for the menu, on the tip's side for start
+  miniKey(keyX, 19, !frontRight, dogPressed(false));
+  miniKey(keyX, 26, frontRight, dogPressed(true));
+  if (normal()) {
+    dogText(dogFontTiny, keyX - 4 - dogTextWidth(dogFontTiny, menu) + 1, 24, menu);
+    dogText(dogFontTiny, keyX - 4 - dogTextWidth(dogFontTiny, start) + 1, 31, start);
+  } else {
+    dogText(dogFontTiny, keyX + 10, 24, menu);
+    dogText(dogFontTiny, keyX + 10, 31, start);
+  }
 }
 
 // ---- Temperature and trend ----
@@ -463,6 +515,8 @@ static void drawHistory(int16_t x0) {
 
 // ---- For the other home views (ts101_dog_home_views.cpp) ----
 int16_t  dogHomeRollDeg() { return rollDeg; }
+int16_t  dogHomeAlongDeg() { return alongDeg; }
+int16_t  dogHomeTurnDeg() { return turnDeg; }
 bool     dogHomeTipDown() { return tipDown; }
 bool     dogHomeShaking() { return shaking; }
 int8_t   dogHomeTrend() { return trendDirection; }
@@ -489,10 +543,11 @@ void dogDrawHome(uint16_t shownTemperature) {
   const int16_t  x0    = normal() ? 37 : 36;
 
   dogHomeMotionUpdate();
-  drawPose(normal() ? 0 : OLED_WIDTH - DOG_POSE_SIZE, hopRow);
   drawStatistics(x0);
   drawTemperature(normal() ? OLED_WIDTH - 1 : 33, shownTemperature, blank);
   drawHistory(x0);
-  drawButtonPair(normal() ? 96 : 0);
+  dogDrawSmallIron(); // under the statistics, on the curve
+  drawKeyHints();
+  drawPose(normal() ? 0 : OLED_WIDTH - DOG_POSE_SIZE, hopRow);
 }
 #endif
