@@ -10,10 +10,6 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
   // Drop to sleep temperature and display until movement or button press
 #ifdef TS101_DOG_UI
   dogSaveCounters(); // pulling the plug after this loses nothing
-  // State 3 = the tick the wake frames started, 0 while asleep
-  if (!cxt->scratch_state.state3) {
-    dogSleepWakeFrame = 0;
-  }
   if (dogBothDown() || dogHoldDone(false, DOG_HOLD_STOP)) {
     dogPressConsumed();
     currentTempTargetDegC = 0;
@@ -51,20 +47,11 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
     }
   }
 #ifdef TS101_DOG_UI
-  // Moved, or a button let go: three frames of the dog looking up, with the heater already on its way back to the solder
+  // Interface v2: moved, or a button let go, wakes the iron at once, back to soldering on the solder
   // (the rear button may be on its way to a stop: only letting go wakes the iron, even if it moves meanwhile)
-  if (!cxt->scratch_state.state3 && !dogPressed(false) && !cxt->scratch_state.state4 && !shouldBeSleeping()) {
+  if (!dogPressed(false) && !cxt->scratch_state.state4 && !shouldBeSleeping()) {
     dogPressConsumed(); // a click that woke the iron must not reach soldering, where it would change the solder
-    cxt->scratch_state.state3 = xTaskGetTickCount() | 1;
-  }
-  if (cxt->scratch_state.state3) {
-    const TickType_t since = (xTaskGetTickCount() | 1) - cxt->scratch_state.state3;
-    if (since >= 3 * DOG_WAKE_FRAME_TICKS) {
-      dogSleepWakeFrame = 0;
-      return cxt->previousMode;
-    }
-    dogSleepWakeFrame     = 1 + since / DOG_WAKE_FRAME_TICKS;
-    currentTempTargetDegC = getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::convertFtoC(getSettingValue(SettingsOptions::SolderingTemp)) : getSettingValue(SettingsOptions::SolderingTemp);
+    return cxt->previousMode;
   }
 #endif
   // draw the lcd
@@ -77,8 +64,8 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
   }
 
 #ifdef TS101_DOG_UI
-  if (cxt->scratch_state.state3 || dogPressed(false)) {
-    return OperatingMode::Sleeping; // waking, or the rear button may be on its way to a stop
+  if (dogPressed(false)) {
+    return OperatingMode::Sleeping; // the rear button may be on its way to a stop
   }
   if (cxt->scratch_state.state4 && !shouldBeSleeping()) {
     dogPressConsumed(); // hibernating: GUIThread goes on to soldering by itself

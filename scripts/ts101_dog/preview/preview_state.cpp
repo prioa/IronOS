@@ -206,10 +206,35 @@ static void wipeFrame(uint8_t step) {
   settings[SettingsOptions::DogSolderView] = 0;
 }
 
+// The screen saver after this many frames since falling asleep, played frame by frame as the iron does
+static void sleepAt(uint32_t frames) {
+  const uint32_t end = previewTicks;
+  previewTicks       = end - frames * 125;
+  lastMovementTime = lastButtonTime = end - 60 * 1000 - 23 * 1000; // asleep after a minute, the iron switches off after 10
+  for (uint32_t i = 0; i <= frames; i++) {
+    previewTicks = end - (frames - i) * 125;
+    OLED::clearScreen();
+    ui_draw_soldering_basic_sleep(150);
+  }
+}
+
 std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 600000; // 10 min after power on
   return {
       // name, ticks, tip, set, x10 W, x10 V, -, draw
+      {"s01_hereinlaufen", T, 150, 150, 0, 201, false, [] { sleepAt(14); }},
+      {"s02_abbremsen", T, 150, 150, 0, 201, false, [] { sleepAt(33); }},
+      {"s03_sitzen", T, 150, 150, 0, 201, false, [] { sleepAt(40); }},
+      {"s04_zzz1", T, 150, 150, 0, 201, false, [] { sleepAt(44); }},
+      {"s05_zzz3", T, 150, 150, 0, 201, false, [] { sleepAt(51); }},
+      {"s06_hocken", T, 150, 150, 0, 201, false, [] { sleepAt(79); }},
+      {"s07_haeufchen4", T, 150, 150, 0, 201, false, [] { sleepAt(85); }},
+      {"s08_weiterlaufen", T, 150, 150, 0, 201, false, [] { sleepAt(97); }},
+      {"s09_hinaus", T, 150, 150, 0, 201, false, [] { sleepAt(118); }},
+      {"s10_runde2_herein", T, 150, 150, 0, 201, false, [] { sleepAt(170); }},
+      {"s11_runde2_doesen", T, 150, 150, 0, 201, false, [] { sleepAt(205); }},
+      {"s12_runde2_haeufchen", T, 150, 150, 0, 201, false, [] { sleepAt(236); }},
+      {"s13_runde2_hinaus", T, 150, 150, 0, 201, false, [] { sleepAt(265); }},
       {"h01_aus", T, 24, 350, 0, 201, false,
        [] {
          curve(24, {{24, 93}});

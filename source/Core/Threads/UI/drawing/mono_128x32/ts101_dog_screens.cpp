@@ -435,6 +435,7 @@ void ui_draw_soldering_power_status(bool boostModeOn) {
 }
 
 #endif
+#ifdef TS101_DOG_UI_V1 // interface v2: the screen saver in ts101_v2_sleep.cpp
 /*
  * Sleep: no buttons on this screen, so it stays the same way round when the iron is turned
  *   dog  z z z  SCHLAF         ^ 150°
@@ -510,6 +511,7 @@ static void drawSleepScreen(TemperatureType_t tipTemp) {
 
 void ui_draw_soldering_detailed_sleep(TemperatureType_t tipTemp) { drawSleepScreen(tipTemp); }
 void ui_draw_soldering_basic_sleep(TemperatureType_t tipTemp) { drawSleepScreen(tipTemp); }
+#endif
 
 /*
  * Home: the screen itself is in ts101_dog_home.cpp, alerts replace it
