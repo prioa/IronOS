@@ -4,6 +4,7 @@
  * too late to invert a field on touch or to fill a bar from the first moment.
  */
 #include "ts101_dog_ui.hpp"
+#include "ts101_v2_fonts.h"
 #ifdef TS101_DOG_UI
 #include "BSP.h"
 #include "OLED.hpp"
@@ -13,7 +14,7 @@
 // ---- Text ----
 static uint8_t nextCode(const char *&text) {
   uint8_t c = *text++;
-  if ((c == 0xC2 || c == 0xC3) && *text) {
+  if ((c == 0xC2 || c == 0xC3) && *text) { // (codes below 0x20 are the v2 name font's squashed Ä Ö Ü)
     c = *text++; // Ä Ö Ü ° are stored under their second UTF-8 byte
   }
   return c;
@@ -52,9 +53,9 @@ void dogText(const DogFont &font, int16_t x, int16_t base, const char *text) {
   }
 }
 
-void dogSmall(int16_t x, const char *text, int16_t base) { dogText(dogFontSmall, x, base, text); }
-void dogSmallCentre(int16_t x0, int16_t x1, const char *text, int16_t base) { dogSmall(x0 + (x1 - x0 + 1 - dogTextWidth(dogFontSmall, text)) / 2, text, base); }
-void dogSmallRight(int16_t x1, const char *text, int16_t base) { dogSmall(x1 - dogTextWidth(dogFontSmall, text) + 1, text, base); }
+void dogSmall(int16_t x, const char *text, int16_t base) { dogText(dogFont3x5, x, base, text); } // interface v2: the 3x5 font
+void dogSmallCentre(int16_t x0, int16_t x1, const char *text, int16_t base) { dogSmall(x0 + (x1 - x0 + 1 - dogTextWidth(dogFont3x5, text)) / 2, text, base); }
+void dogSmallRight(int16_t x1, const char *text, int16_t base) { dogSmall(x1 - dogTextWidth(dogFont3x5, text) + 1, text, base); }
 
 char *dogFormat(char *out, uint16_t value) {
   char     digits[5];

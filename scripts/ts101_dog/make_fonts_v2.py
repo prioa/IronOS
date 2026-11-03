@@ -18,7 +18,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', '..', 'source', 'Core', 'Threads', 'UI', 'drawing', 'mono_128x32')
 NAME_CHARS = ' ' + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + 'abcdefghijklmnopqrstuvwxyz' + '0123456789' + "!%+-./:()°,'?" + 'ÄÖÜäöüß'
-NUM_CHARS = '0123456789'
+NUM_CHARS = '0123456789.'  # the point for the menu's tenths (PD timeout, keep awake)
 
 
 def read_bdf(path):
@@ -147,16 +147,21 @@ def main():
     name = {}
     for c in NAME_CHARS:
         name[c] = name_bdf[ord(c)]
-    for letter, umlaut in (('A', 'adieresis'), ('O', 'odieresis'), ('U', 'udieresis')):
-        name[{'A': 'Ä', 'O': 'Ö', 'U': 'Ü'}[letter]] = capital_umlaut(name_bdf, letter, {'adieresis': 'ä', 'odieresis': 'ö', 'udieresis': 'ü'}[umlaut])
+    # Ä Ö Ü as helvB08 has them, the dots two rows above the capitals: rows 2 and 3 have a free row above them. Squashed into the
+    # capitals' 8 rows under the codes 0x11-0x13, for the inverted labels and the name row (gridState / gridName swap them in)
+    for code, letter, umlaut in ((0x11, 'A', 'ä'), (0x12, 'O', 'ö'), (0x13, 'U', 'ü')):
+        name[chr(code)] = capital_umlaut(name_bdf, letter, umlaut)
     for c, (pixels, _) in name.items():
-        assert all(-8 <= y <= 1 for _, y in pixels), f'helvB08 {c!r} leaves the rows -8..1'
+        assert all(-10 <= y <= 1 for _, y in pixels), f'helvB08 {c!r} leaves the rows -10..1'
 
     num = {}
     report = []
     for c in NUM_CHARS:
         pixels, advance = num_bdf[ord(c)]
         assert all(-11 <= y <= -1 for _, y in pixels), f'helvB10 {c!r} leaves the rows -11..-1'
+        if c == '.':
+            num[c] = (pixels, advance)
+            continue
         if advance != 8:
             report.append(f'helvB10 {c}: advance {advance} set to 8')
         num[c] = (pixels, 8)
@@ -176,8 +181,8 @@ def main():
          '// Copyright 1988, 1994 Digital Equipment Corporation; permission notice in scripts/ts101_dog/fonts/helvB08.bdf',
          '#include "ts101_v2_fonts.h"', '']
     sizes = {}
-    # baseline: the row of the baseline inside the glyph. Name: rows -8..1 -> 0..9; Num: -11..-1 -> 0..10; 3x5: -5..-1 -> 0..4
-    for label, glyphs, pages, baseline in (('Name', name, 2, 8), ('Num', num, 2, 11), ('3x5', tiny, 1, 5)):
+    # baseline: the row of the baseline inside the glyph. Name: rows -10..1 -> 0..11; Num: -11..-1 -> 0..10; 3x5: -5..-1 -> 0..4
+    for label, glyphs, pages, baseline in (('Name', name, 2, 10), ('Num', num, 2, 11), ('3x5', tiny, 1, 5)):
         codes, offsets, widths, advances, bitmap = build(glyphs, pages, baseline)
         assert len(set(codes)) == len(codes), f'{label}: two glyphs share a code'
         sizes[label] = len(codes) * 5 + len(bitmap)

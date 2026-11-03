@@ -8,6 +8,7 @@
  */
 #include "OperatingModes.h"
 #include "ts101_dog_ui.hpp"
+#include "ts101_v2_solder.hpp"
 #include "ui_drawing.hpp"
 #ifdef TS101_DOG_UI
 
@@ -62,7 +63,7 @@ static const DogMenuItem displayItems[] = {
     {"Animation", "Animation", OPT(AnimationSpeed), Fmt::Animation, nullptr},
     {"Logo", "Logo", OPT(LOGOTime), Fmt::Logo, nullptr},
     {"Sensoren", "Sensors", OPT(DogSensorMode), Fmt::SensorMode, nullptr},
-    {"Tasten tausch.", "Swap buttons", OPT(ReverseButtonTempChangeEnabled), Fmt::OnOff, nullptr},
+    {"Tastentausch", "Swap buttons", OPT(ReverseButtonTempChangeEnabled), Fmt::OnOff, nullptr},
 };
 static const DogMenuItem infoItems[DOG_INFO_PAGES] = {
     {"Strom", "Power", SECTION(0), Fmt::Info, nullptr},
@@ -349,18 +350,14 @@ static void stepValue(const DogMenuItem &item, bool up) {
   }
 }
 
-// ---- Drawing ----
-#define TOP_BASE   7
-#define NAME_BASE  20 // the name's letters start on row 10
-#define NEXT_BASE  32 // the small row at the bottom starts on row 25
-#define DOT_PITCH  5
-#define BOXES_FROM 96 // the rows from 17 down stop short of the button boxes here
-extern const uint8_t dogKeyNothing[1];
-const uint8_t dogKeyNothing[1] = {0};
+// ---- Drawing (interface v2) ----
+//   Schlaf nach                 10       A the entry                  D the value: a number in helvB10, a word in helvB08
+//   SCHLAF 1/4                  MIN      B section and position       E the unit ("SOLL" for temperatures)
+//   v SCHLAF-TEMP             [v] [±]    C what comes next            F next entry, what the front button does
+// While changing a number: the value inverted, row 2 the range, row 3 a bar up to the value, - and +
+#define BLINK_TICKS_V2 BLINK_TICKS
 
-static inline int16_t stageX() { return OLED::getRotation() ? 0 : 35; }
-
-// The small font only has capitals; a name is kept once, in its large form
+// The capitals of a name: ä ö ü become Ä Ö Ü
 static void toCapitals(char *out, const char *text) {
   for (; *text; text++) {
     uint8_t c = *text;
@@ -374,17 +371,6 @@ static void toCapitals(char *out, const char *text) {
   *out = 0;
 }
 
-// The two boxes at the buttons: an icon of 11x11, nullptr for - and +, dogKeyNothing for an empty box
-static void drawBoxes(const uint8_t *front, const uint8_t *rear) {
-  const uint8_t x          = OLED::getRotation() ? BOXES_FROM : 0;
-  const bool    frontRight = dogFrontOnRight();
-  for (uint8_t i = 0; i < 2; i++) {
-    const bool     isFront = (i == 1) == frontRight;
-    const uint8_t *icon    = isFront ? front : rear;
-    dogKeyBox(x + 17 * i, isFront, icon, 2, 2, icon == dogKeyNothing ? 0 : 11, 16);
-  }
-}
-
 // The entry of the top level that opens this section
 static uint8_t parentOf(uint8_t section) {
   uint8_t i = 0;
@@ -396,108 +382,159 @@ static uint8_t parentOf(uint8_t section) {
 
 static void formatSectionTitle(char *out, uint8_t section) { toCapitals(out, section ? nameOf(rootItems[parentOf(section)]) : T("Menü", "Menu")); }
 
-static void drawTopRow(uint8_t section, uint8_t pos) {
-  char title[24];
-  formatSectionTitle(title, section);
-  dogSmall(0, title, TOP_BASE);
-  const int16_t x0 = dogTextWidth(dogFontSmall, title) + 3;
-  for (uint8_t i = 0; i < sections[section].count; i++) {
-    const int16_t x = x0 + i * DOT_PITCH;
-    if (i == pos) {
-      OLED::drawFilledRect(x, 2, x + 2, 4, false);
-    } else {
-      OLED::drawFilledRect(x + 1, 3, x + 1, 3, false);
-    }
-  }
+// Row 2: "SCHLAF 1/4"
+static void drawPosition(uint8_t section, uint8_t pos) {
+  char  text[32];
+  formatSectionTitle(text, section);
+  char *p = text + strlen(text);
+  *p++    = ' ';
+  p       = dogFormat(p, pos + 1);
+  *p++    = '/';
+  dogFormat(p, sections[section].count);
+  gridValues(0, text);
 }
 
-// What comes next: a small triangle and its name
+// Row 3, capitals from row 23: a small triangle and the next entry
 static void drawNext(uint8_t section, uint8_t pos) {
   char text[24];
   toCapitals(text, nameOf(sections[section].items[(pos + 1) % sections[section].count]));
-  dogBlit(stageX(), 27, 5, 8, iconMiniDown);
-  dogSmall(stageX() + 8, text, NEXT_BASE);
+  gridClip(0, GRID_LEFT_END);
+  for (uint8_t i = 0; i < 3; i++) {
+    gridFill(i, 26 + i, 4 - i, 26 + i); // 5 wide, 3 high, on the middle of the capitals
+  }
+  dogText(dogFontName, 8, 31, text);
+  gridClipAll();
+}
+
+// A number splits into its digits for zone D and its unit for zone E; false for a word ("Aus", "Links")
+static bool splitNumber(const DogMenuItem &item, const char *value, char *digits, char *unit) {
+  if (!isNumber(item.format) || value[0] < '0' || value[0] > '9') {
+    return false;
+  }
+  while ((*value >= '0' && *value <= '9') || *value == '.') {
+    *digits++ = *value++;
+  }
+  *digits = 0;
+  while (*value == ' ') {
+    value++;
+  }
+  if (item.format == Fmt::Temp || item.format == Fmt::SleepTemp || item.format == Fmt::BoostTemp) {
+    strcpy(unit, T("SOLL", "SET"));
+  } else {
+    toCapitals(unit, value);
+  }
+  return true;
 }
 
 static void drawValue(const DogMenuItem &item, bool inverted) {
-  if (item.format == Fmt::Section || item.format == Fmt::Action) {
-    dogBlit(OLED_WIDTH - 5, 0, 5, 16, iconMiniRight);
-    return;
+  if (item.format == Fmt::Section || item.format == Fmt::Action || item.format == Fmt::Info) {
+    return; // a section, or something to run: zones D and E stay empty
   }
-  char value[16];
+  char value[16], digits[8], unit[8];
   formatValue(item, value);
-  const int16_t x = OLED_WIDTH - dogTextWidth(dogFontLabel, value);
-  dogText(dogFontLabel, x, 10, value);
+  int16_t x;
+  if (splitNumber(item, value, digits, unit)) {
+    const bool degrees = item.format == Fmt::Temp || item.format == Fmt::SleepTemp || item.format == Fmt::BoostTemp;
+    if (degrees) {
+      gridTemp(getSettingValue(item.option));
+      x = OLED_WIDTH - dogTextWidth(dogFontNum, digits) - 1 - dogV2Ring.width;
+    } else {
+      x = OLED_WIDTH - dogTextWidth(dogFontNum, digits);
+      dogText(dogFontNum, x, 11, digits);
+    }
+    gridTextRight(dogFont3x5, OLED_WIDTH - 1, GRID_TARGET_BASE, unit);
+  } else {
+    // A switch or choice in helvB08; a long word runs left into the name row where the name leaves it room
+    x = OLED_WIDTH - dogTextWidth(dogFontName, value);
+    dogText(dogFontName, x, GRID_NAME_BASE, value);
+  }
   if (inverted) {
-    OLED::invertRect(x > 0 ? x - 1 : 0, 0, OLED_WIDTH - 1, 10);
+    OLED::invertRect(x - 1 < GRID_RIGHT_X ? x - 1 : GRID_RIGHT_X, 0, OLED_WIDTH - 1, 10);
   }
 }
 
-static const uint8_t *frontIcon(const DogMenuItem &item) {
+static const DogIcon *frontIcon(const DogMenuItem &item) {
   switch (item.format) {
   case Fmt::Section:
   case Fmt::Action:
-    return iconKeyOpen;
+    return &iconV2Play;
   case Fmt::Info:
-    return (uint8_t)item.option == DOG_INFO_PAGES - 1 ? iconKeyOpen : dogKeyNothing; // only the last page leads on
+    return (uint8_t)item.option == DOG_INFO_PAGES - 1 ? &iconV2Play : nullptr; // only the last page leads on
   default:
-    return isNumber(item.format) ? iconKeyEdit : iconKeyCycle;
+    return isNumber(item.format) ? &iconV2Change : &iconV2Toggle;
   }
 }
 
 void dogDrawMenuList(uint8_t section, uint8_t pos) {
   const DogMenuItem &item = sections[section].items[pos];
-  drawTopRow(section, pos);
+  gridName(nameOf(item));
   if (item.format == Fmt::Info) {
-    char title[24];
-    toCapitals(title, nameOf(item));
-    dogSmallRight(OLED_WIDTH - 1, title, TOP_BASE);
-    dogDrawInfoRows((uint8_t)item.option);
+    dogDrawInfoRows((uint8_t)item.option); // its two readings on rows 2 and 3
   } else {
-    dogText(dogFontLabel, stageX(), NAME_BASE, nameOf(item));
+    drawPosition(section, pos);
+    drawNext(section, pos);
     drawValue(item, blinkFrom && (xTaskGetTickCount() | 1) - blinkFrom < BLINK_TICKS);
   }
-  drawNext(section, pos);
-  drawBoxes(frontIcon(item), iconKeyDown);
+  gridKeys(&iconV2Next, frontIcon(item));
+}
+
+// Where the value is between the ends it can take: 0-93 columns of the bar
+static int16_t barColumns(const DogMenuItem &item) {
+  const bool inF = getSettingValue(SettingsOptions::TemperatureInF);
+  int32_t    lo = settingsConstants[(int)item.option].min, hi = settingsConstants[(int)item.option].max;
+  if (item.format == Fmt::Temp) {
+    lo = inF ? MIN_TEMP_F : MIN_TEMP_C, hi = inF ? MAX_TEMP_F : MAX_TEMP_C;
+  } else if (item.format == Fmt::SleepTemp) {
+    lo = inF ? 60 : 10, hi = inF ? 580 : 300;
+  }
+  const int32_t v = getSettingValue(item.option);
+  if (hi <= lo || v <= lo) {
+    return 0;
+  }
+  return v >= hi ? GRID_LEFT_END + 1 : (v - lo) * (GRID_LEFT_END + 1) / (hi - lo);
 }
 
 void dogDrawMenuValue(uint8_t section, uint8_t pos) {
   const DogMenuItem &item = sections[section].items[pos];
-  drawTopRow(section, pos);
-  dogText(dogFontLabel, stageX(), NAME_BASE, nameOf(item));
-  drawValue(item, true);
-  char range[20];
+  gridName(nameOf(item));
+  char range[24];
   formatRange(item, range);
-  dogSmall(stageX(), range, NEXT_BASE);
-  drawBoxes(nullptr, nullptr);
+  gridValues(0, range);
+  // The bar on rows 25-30: its outline, filled up to the value
+  gridClip(0, GRID_LEFT_END);
+  gridFill(0, 25, GRID_LEFT_END, 25);
+  gridFill(0, 30, GRID_LEFT_END, 30);
+  gridFill(0, 25, 0, 30);
+  gridFill(GRID_LEFT_END, 25, GRID_LEFT_END, 30);
+  const int16_t filled = barColumns(item);
+  if (filled > 0) {
+    gridFill(0, 25, filled - 1, 30);
+  }
+  gridClipAll();
+  drawValue(item, true);
+  gridKeys(&iconV2Minus, &iconV2Plus);
 }
 
 #ifdef BUTTON_TEST
-// Every entry fits next to its neighbours in the language of this build; returns the first that does not, or nullptr
+// Every entry fits its zones in the language of this build; returns the first that does not, or nullptr
 const char *dogMenuRowOverflow() {
   static const uint16_t samples[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 50, 60, 99, 100, 120, 180, 300, 450, 850};
-  const int16_t         limit     = BOXES_FROM - 2;
-  char                  text[24];
+  char                  text[32];
   for (uint8_t sct = 0; sct < sizeof(sections) / sizeof(sections[0]); sct++) {
-    formatSectionTitle(text, sct);
-    const int16_t dotsEnd = dogTextWidth(dogFontSmall, text) + 3 + sections[sct].count * DOT_PITCH;
     for (uint8_t i = 0; i < sections[sct].count; i++) {
       const DogMenuItem &item = sections[sct].items[i];
-      toCapitals(text, nameOf(item));
-      if (item.format == Fmt::Info) {
-        if (dotsEnd + 2 + dogTextWidth(dogFontSmall, text) > OLED_WIDTH) {
-          return nameOf(item);
-        }
-        continue;
+      if (dogTextWidth(dogFontName, nameOf(item)) > GRID_NAME_END + 1) {
+        return nameOf(item);
       }
-      if (dogTextWidth(dogFontLabel, nameOf(item)) > limit || 8 + dogTextWidth(dogFontSmall, text) > limit) {
+      toCapitals(text, nameOf(item));
+      if (8 + dogTextWidth(dogFontName, text) > GRID_LEFT_END + 1) {
         return nameOf(item);
       }
       formatRange(item, text);
-      if (dogTextWidth(dogFontSmall, text) > limit) {
+      if (dogTextWidth(dogFontName, text) > GRID_LEFT_END + 1) {
         return nameOf(item);
       }
-      if (item.option < SettingsOptionsLength) {
+      if (item.option < SettingsOptionsLength && item.format != Fmt::Section && item.format != Fmt::Info) {
         const uint16_t saved = getSettingValue(item.option);
         for (uint16_t v : samples) {
           // The settings only take values their limits allow; these are the ones this format can show
@@ -507,8 +544,12 @@ const char *dogMenuRowOverflow() {
           if (item.format == Fmt::Watts && v > MAX_POWER_LIMIT) continue;
           if (item.format == Fmt::DcCutoff && v > 4) continue;
           setSettingValue(item.option, v);
-          formatValue(item, text);
-          if (dotsEnd + 2 + dogTextWidth(dogFontLabel, text) > OLED_WIDTH) {
+          char value[16], digits[8], unit[8];
+          formatValue(item, value);
+          const bool fits = splitNumber(item, value, digits, unit)
+                                ? dogTextWidth(dogFontNum, digits) + 5 <= OLED_WIDTH - GRID_RIGHT_X && dogTextWidth(dogFont3x5, unit) <= OLED_WIDTH - GRID_RIGHT_X
+                                : dogTextWidth(dogFontName, nameOf(item)) + 4 + dogTextWidth(dogFontName, value) <= OLED_WIDTH;
+          if (!fits) {
             setSettingValue(item.option, saved);
             return nameOf(item);
           }

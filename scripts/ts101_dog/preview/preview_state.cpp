@@ -157,7 +157,7 @@ static void setAngle(int degrees) { // the iron's long axis against the horizon,
   dogAccelRaw[2] = 0;
 }
 
-uint32_t availableW10(uint8_t) { return (uint32_t)vX10 * vX10 / getTipResistanceX10(); } // power.cpp: P = V^2 / R
+uint32_t availableW10(uint8_t) { return (uint32_t)vX10 * vX10 / getTipResistanceX10() * 255 / 283; } // power.cpp: V^2 / R, less the ADC dead time (htimADC period 255 + 28)
 bool     warnUser(const char *warning, const ButtonState buttons);
 
 static void pwm(uint8_t percent) { pendingPWM = percent * 255 / 100; }
@@ -225,6 +225,17 @@ std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 600000; // 10 min after power on
   return {
       // name, ticks, tip, set, x10 W, x10 V, -, draw
+      {"m01_eigenes_ziel", T, 24, 335, 0, 201, false, [] { dogDrawMenuList(0, 0); }},
+      {"m02_untermenue_loeten", T, 24, 335, 0, 201, false, [] { dogDrawMenuList(0, 1); }},
+      {"m03_zahl_schlaf_nach", T, 24, 335, 0, 201, false, [] { settings[SettingsOptions::SleepTime] = 10; dogDrawMenuList(2, 0); }},
+      {"m04_schalter_invertieren", T, 24, 335, 0, 201, false, [] { dogDrawMenuList(3, 2); }},
+      {"m05_auswahl_sensoren", T, 24, 335, 0, 201, false, [] { dogDrawMenuList(3, 6); }},
+      {"m07_aendern_schlaf_nach", T, 24, 335, 0, 201, false, [] { settings[SettingsOptions::SleepTime] = 10; dogDrawMenuValue(2, 0); }},
+      {"m08_aendern_schlaf_temp", T, 24, 335, 0, 201, false, [] { dogDrawMenuValue(2, 1); }},
+      {"m09_info_strom", T, 24, 335, 0, 201, false, [] { dogDrawMenuList(DOG_MENU_SECTION_INFO, 0); }},
+      {"m10_info_statistik", T, 24, 335, 0, 201, false, [] { dogDrawMenuList(DOG_MENU_SECTION_INFO, 3); }},
+      {"m11_zahl_pd_timeout", T, 24, 335, 0, 201, false, [] { settings[SettingsOptions::PDNegTimeout] = 20; dogDrawMenuList(1, 5); }},
+      {"m12_umgeschaltet_blinkt", T, 24, 335, 0, 201, false, [] { settings[SettingsOptions::DogSensorMode] = 1; dogMenuBlink(); dogDrawMenuList(3, 6); settings[SettingsOptions::DogSensorMode] = 0; }},
       {"w01_netzteil", T, 330, 350, 440, 201, false,
        [] {
          powerSupplyWattageLimit = 45;

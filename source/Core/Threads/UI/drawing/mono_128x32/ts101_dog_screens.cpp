@@ -592,12 +592,16 @@ void dogDrawInfoRows(uint8_t page) {
     value2 = "";
     break;
   }
-  const int16_t x0 = normal() ? 0 : 35;
-  if (dogTextWidth(dogFontSmall, value1) + dogTextWidth(dogFontSmall, label1) + 6 <= OLED_WIDTH) {
-    dogSmall(0, label1, 15); // a long development version takes the whole row
+  // Interface v2: label and reading on row 2 (capitals from 12) and row 3 (from 23), the reading right aligned at x 92
+  const char *labels[2] = {label1, label2}, *values[2] = {value1, value2};
+  for (uint8_t row = 0; row < 2; row++) {
+    const int16_t base = row ? 31 : GRID_ROW2_BASE;
+    gridClip(0, GRID_LEFT_END);
+    if (dogTextWidth(dogFontName, labels[row]) + 4 + dogTextWidth(dogFontName, values[row]) <= GRID_LEFT_END + 1) {
+      dogText(dogFontName, 0, base, labels[row]); // a long development version takes the whole row
+    }
+    gridTextRight(dogFontName, GRID_LEFT_END, base, values[row]);
+    gridClipAll();
   }
-  dogSmallRight(OLED_WIDTH - 1, value1, 15);
-  dogSmall(x0, label2, 23);
-  dogSmallRight(normal() ? 94 : OLED_WIDTH - 1, value2, 23);
 }
 #endif

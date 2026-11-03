@@ -50,10 +50,28 @@ void gridTextRight(const DogFont &font, int16_t x1, int16_t base, const char *te
 
 void gridTextCentre(const DogFont &font, int16_t x0, int16_t x1, int16_t base, const char *text) { dogText(font, x0 + (x1 - x0 + 1 - dogTextWidth(font, text)) / 2, base, text); }
 
+// Ä Ö Ü with their dots inside the capitals' rows (the font's codes 0x11-0x13): for the name row, which has no row above it, and
+// the inverted labels, whose box starts right above the capitals
+static const char *squashUmlauts(char *out, uint8_t size, const char *text) {
+  uint8_t n = 0;
+  for (; *text && n + 1 < size; text++) {
+    const uint8_t c = text[0], d = text[1];
+    if (c == 0xC3 && (d == 0x84 || d == 0x96 || d == 0x9C)) {
+      out[n++] = d == 0x84 ? 0x11 : (d == 0x96 ? 0x12 : 0x13);
+      text++;
+    } else {
+      out[n++] = c;
+    }
+  }
+  out[n] = 0;
+  return out;
+}
+
 // ---- A ----
 void gridName(const char *text) {
+  char squashed[32];
   gridClip(0, GRID_NAME_END);
-  dogText(dogFontName, 0, GRID_NAME_BASE, text);
+  dogText(dogFontName, 0, GRID_NAME_BASE, squashUmlauts(squashed, sizeof(squashed), text));
   gridClipAll();
 }
 
@@ -65,6 +83,8 @@ void gridValues(int16_t x, const char *values) {
 }
 
 void gridState(const char *label, const char *values) {
+  char squashed[24];
+  label = squashUmlauts(squashed, sizeof(squashed), label);
   gridClip(0, GRID_LEFT_END);
   const int16_t right = dogTextWidth(dogFontName, label) + 1; // the text from x 1, a pixel of the box on both sides
   dogText(dogFontName, 1, GRID_ROW2_BASE, label);
@@ -76,6 +96,8 @@ void gridState(const char *label, const char *values) {
 }
 
 void gridWarn(const char *text) {
+  char squashed[40];
+  text = squashUmlauts(squashed, sizeof(squashed), text);
   gridClip(0, GRID_LEFT_END);
   dogText(dogFontName, 1, GRID_ROW2_BASE, text);
   gridInvert(0, GRID_ROW2_TOP, GRID_LEFT_END, GRID_ROW2_BOT);
