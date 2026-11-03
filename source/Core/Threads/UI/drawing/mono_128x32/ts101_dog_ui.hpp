@@ -87,6 +87,7 @@ void dogDrawInfoRows(uint8_t page);
 
 // ---- The solders: a click while soldering moves one up or down, nothing at the ends ----
 void   dogJumpPreset(bool up);
+void   dogSetPreset(uint8_t i);
 int8_t dogPresetIndex(); // which solder the set point is on, -1 for none
 #define DOG_BOOST_CLICK_GUARD (TICKS_100MS * 8) // clicks this soon after a boost are ignored (upstream issue #1663)
 

@@ -4,6 +4,7 @@
  * Main.cpp bootstraps the device and then hands over to FreeRTOS and the threads
  */
 
+#include "ts101_telemetry.hpp"
 #include "main.hpp"
 #include "BSP.h"
 #include "Settings.h"
@@ -37,6 +38,9 @@ osStaticThreadDef_t POWTaskControlBlock;
 // Main sets up the hardware then hands over to the FreeRTOS kernel
 int main(void) {
   preRToSInit();
+#ifdef TS101_TELEMETRY
+  telemetryInit(); // before any thread: the block at 0x20000000 holds whatever the last reset left
+#endif
 
   resetWatchdog();
   // Testing for which accelerometer is mounted

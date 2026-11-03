@@ -27,6 +27,7 @@ extern "C" {
 #include "stdlib.h"
 #include "string.h"
 #include "ts101_dog_ui.hpp"
+#include "ts101_telemetry.hpp"
 #include "ui_drawing.hpp"
 #ifdef POW_PD
 #include "USBPD.h"
@@ -158,6 +159,9 @@ OperatingMode guiHandleDraw(void) {
 }
 void guiRenderLoop(void) {
   OperatingMode newMode = guiHandleDraw(); // This does the screen drawing
+#ifdef TS101_TELEMETRY
+  newMode = telemetryGui(currentOperatingMode, newMode, &context); // the ESP32's commands, through the paths the buttons take
+#endif
 
   // Post draw we handle any state transitions
 

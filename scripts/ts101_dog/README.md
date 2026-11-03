@@ -99,6 +99,58 @@ what the button does now.
 
 The screens before v2 stay in the sources behind `TS101_DOG_UI_V1`, which no build defines; their bitmaps stay in `art/`.
 
+## Telemetry block for an ESP32 (SWD)
+
+The TS101 build keeps the first 64 bytes of RAM, **0x20000000-0x2000003F**, for a block of live values
+(`source/Core/Inc/ts101_telemetry.hpp`, section `.telemetry`, NOLOAD, set up by the linker script only when the Makefile defines
+`__TELEMETRY_SIZE__`, which it does for the TS101 alone). An external reader finds it without a symbol table. Little endian.
+
+| Offset | Type | Field | |
+|---|---|---|---|
+| 0x00 | u32 | magic | `0x54315354` ("TS1T"), written last at start |
+| 0x04 | u16 | version | 1 |
+| 0x06 | u16 | size | 64 |
+| 0x08 | u32 | seq | seqlock, odd while being written |
+| 0x0C | u32 | uptime_ms | |
+| 0x10 | i16 | tip_c | tip temperature, C |
+| 0x12 | i16 | target_c | set point the PID thread is given, C |
+| 0x14 | i16 | handle_cx10 | grip (cold junction) in 0.1 C |
+| 0x16 | u16 | vin_mv | input voltage |
+| 0x18 | u16 | power_dw | power in 0.1 W, as shown |
+| 0x1A | u8 | pwm_pct | duty 0-100 |
+| 0x1B | u8 | state | 0 off, 1 heating, 2 ready, 3 cooling, 4 load, 5 boost, 6 sleep, 7 locked, 8 warning |
+| 0x1C | u8 | lot | solder 0-4, 255 own target |
+| 0x1D | u8 | view | 0 normal, 1 sensors |
+| 0x1E | i8 | tilt_deg | tilt of the long axis |
+| 0x1F | u8 | warn | bit 0 supply too weak, 1 grip too hot, 2 no tip |
+| 0x20 | u32 | last_move_ms | |
+| 0x24 | u32 | last_button_ms | |
+| 0x28 | u16 | pd_mv | voltage of the PD contract, 0 without one |
+| 0x2A | u16 | pd_max_w | watts of the PD contract |
+| 0x2C | u32 | tip_raw_uv | thermocouple, raw, in uV |
+| 0x30 | u8 | cmd | command from the ESP32, 0 none |
+| 0x31 | u8 | cmd_arg | |
+| 0x32 | u8 | cmd_seq | the ESP32 counts it up for each new command |
+| 0x33 | u8 | cmd_ack | the firmware sets it to cmd_seq once done |
+| 0x34 | u32 | fb_addr | the 512 bytes of the OLED picture |
+| 0x38 | u8 | fb_w, fb_h, fb_layout | 128, 32, 0 = SSD1306 pages (a byte is 8 rows, the lowest bit on top; 4 pages of 128 bytes) |
+| 0x3B | u8 | reserved | 0 |
+| 0x3C | u32 | fb_seq | one more each time a picture went to the OLED |
+
+The PID thread fills it at 8 Hz. **Reading**: read `seq`, read the block, read `seq` again; the copy is valid only when both
+reads are equal and even. For the picture: when `fb_seq` changed, read the 512 bytes at `fb_addr` and then `fb_seq` again;
+the next frame is drawn into the same buffer about 40 ms later, so a copy whose `fb_seq` moved meanwhile is dropped.
+
+**Commands**: write `cmd` and `cmd_arg` first, then `cmd_seq + 1`; the GUI thread handles one per frame and sets `cmd_ack`.
+1 = solder `cmd_arg` (0-4), 2 = stop (heater off, home screen), 3 = start (from the home screen, with the same checks as the
+front button: a tip, no warning, the grip below its limit). Anything else is acknowledged and ignored. No command passes a
+limit: the PID thread still caps the set point, soldering keeps sleep, shutdown, grip and runaway checks. At start the block is
+cleared, so a command left over from before a reset never runs.
+
+The reader must only read memory over SWD (and write the command bytes): no debug register (DBGMCU), no halting the core. The
+TS101 is always built with `swd_enable=1` (Makefile and workflow), else `Setup_HAL` turns the SWD pins off. Unlike stock
+IronOS, the watchdog stays on with SWD here, as the core is never halted.
+
 ## Building
 
 ```sh

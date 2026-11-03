@@ -13,10 +13,15 @@ __APP_BASE_ADDRESS__ = 0x08000000 + __BOOTLDR_SIZE__;
 __ROM_REGION_LENGTH__ = __FLASH_SIZE__ - __BOOTLDR_SIZE__;
 __FLASH_END_ADDR__ = __APP_BASE_ADDRESS__ + __ROM_REGION_LENGTH__;
 
+/* TS101: the first 64 bytes of RAM hold the telemetry block (ts101_telemetry.hpp), at a fixed address for an external reader.
+   The Makefile defines __TELEMETRY_SIZE__ for the TS101 only; every other model keeps all of its RAM as before */
+__TELEMETRY_LEN__ = DEFINED(__TELEMETRY_SIZE__) ? __TELEMETRY_SIZE__ : 0;
+
 /* Memories definition */
 MEMORY
 {
-  RAM (xrw)		: ORIGIN = 0x20000000, LENGTH = 20K
+  TELEMETRY (rw)	: ORIGIN = 0x20000000, LENGTH = __TELEMETRY_LEN__
+  RAM (xrw)		: ORIGIN = 0x20000000 + __TELEMETRY_LEN__, LENGTH = 20K - __TELEMETRY_LEN__
   ROM (rx)		: ORIGIN = __APP_BASE_ADDRESS__, LENGTH = __ROM_REGION_LENGTH__
 }
 /* ROM is normally 48K after the bootloader, however we allocate the last page for settings, and the second last one for display boot logo*/
@@ -100,6 +105,12 @@ SECTIONS
     PROVIDE_HIDDEN (__fini_array_end = .);
     . = ALIGN(4);
   } >ROM
+
+  /* The telemetry block: not loaded and not zeroed by the startup, the firmware fills it before the threads start */
+  .telemetry (NOLOAD) :
+  {
+    KEEP(*(.telemetry))
+  } >TELEMETRY
 
   /* Used by the startup to initialize data */
   _sidata = LOADADDR(.data);

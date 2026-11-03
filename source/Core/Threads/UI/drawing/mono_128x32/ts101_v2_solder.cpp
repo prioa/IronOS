@@ -239,6 +239,8 @@ static TickType_t wipeStart    = 0;
 static bool       wiping       = false;
 static TickType_t switchEpoch  = 0;
 
+bool dogSolderSensorsShown() { return sensorsShown; }
+
 void dogSolderViewReset() {
   sensorsShown = getSettingValue(SettingsOptions::DogSolderView) && !getSettingValue(SettingsOptions::DogSensorMode);
   wiping       = false;
@@ -274,9 +276,11 @@ static void drawSide(bool sensors, bool boost) {
 }
 
 // Not critical, it heats on: the PD contract gives less than the tip would draw at the voltage there is (P = V^2 / R)
+bool dogSupplyWeak() { return powerSupplyWattageLimit > 0 && powerSupplyWattageLimit * 10 < (int32_t)availableW10(0); }
+
 static void checkSupply() {
   static char text[16];
-  if (!warning && powerSupplyWattageLimit > 0 && powerSupplyWattageLimit * 10 < (int32_t)availableW10(0)) {
+  if (!warning && dogSupplyWeak()) {
     dogFormatUnit(text, powerSupplyWattageLimit, "W");
     char row[24];
     strcpy(row, DOG_T("! NETZTEIL ", "! SUPPLY "));

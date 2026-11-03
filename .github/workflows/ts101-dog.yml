@@ -30,7 +30,7 @@ jobs:
         run: git config --global --add safe.directory /__w/IronOS/IronOS && git config --global safe.directory "$GITHUB_WORKSPACE"
 
       - name: Build TS101 ${{ matrix.lang }}
-        run: cd source && make -j$(nproc) model=TS101 firmware-${{ matrix.lang }}
+        run: cd source && make -j$(nproc) model=TS101 swd_enable=1 firmware-${{ matrix.lang }}
 
       - name: Merge the animated boot logo
         run: python3 scripts/ts101_dog/logo128.py source/Hexfile/TS101_${{ matrix.lang }}.hex source/Hexfile/TS101_${{ matrix.lang }}_HUND.hex source/Hexfile/logo.gif

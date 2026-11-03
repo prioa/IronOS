@@ -237,6 +237,8 @@
 
 // German Shepherd UI: sleeping dog, 128x32 boot logo, heat-up bar, presets, soldering timer
 #define TS101_DOG_UI 1
+// The 64 byte block of live values at 0x20000000 for an ESP32 reading over SWD (ts101_telemetry.hpp)
+#define TS101_TELEMETRY 1
 // One per kind of solder, lowest first: Sn42Bi58, Sn63Pb37 or Sn60Pb40, SAC305, Sn99.3Cu0.7, wires and large copper areas
 #define TS101_PRESETS_C {240, 320, 350, 370, 400}
 #define TS101_PRESETS_F {465, 610, 660, 700, 750}

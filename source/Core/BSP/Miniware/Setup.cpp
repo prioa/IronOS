@@ -279,7 +279,8 @@ static void MX_IWDG_Init(void) {
   hiwdg.Instance       = IWDG;
   hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
   hiwdg.Init.Reload    = 100;
-#ifndef SWD_ENABLE
+#if !defined(SWD_ENABLE) || defined(TS101_TELEMETRY)
+  // TS101: SWD stays on for the ESP32, which only reads and never halts the core, so the watchdog stays on too
   HAL_IWDG_Init(&hiwdg);
 #endif
 }

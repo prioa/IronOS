@@ -97,6 +97,10 @@ ifeq ($(model),$(filter $(model),TS101))
 flash_size=98k
 bootldr_size=0x8000
 DEVICE_DFU_ADDRESS=0x08008000
+# The telemetry block at 0x20000000 (ts101_telemetry.hpp): the linker keeps the first 64 bytes of RAM for it
+TS101_TELEMETRY_LDFLAGS=-Wl,--defsym=__TELEMETRY_SIZE__=64
+# Always with SWD: without it Setup_HAL turns the SWD pins off and the ESP32 can't read the block (the watchdog stays on)
+swd_enable=1
 else
 flash_size=62k
 bootldr_size=0x4000
@@ -114,7 +118,7 @@ DEV_GLOBAL_DEFS=-D STM32F103T8Ux       \
                 -D STM32F10X_MD        \
                 -finline-limit=9999999
 
-DEV_LDFLAGS=-Wl,--wrap=printf  -Wl,--no-wchar-size-warning
+DEV_LDFLAGS=-Wl,--wrap=printf  -Wl,--no-wchar-size-warning $(TS101_TELEMETRY_LDFLAGS)
 DEV_AFLAGS=
 DEV_CFLAGS=-D VECT_TAB_OFFSET=$(bootldr_size)U
 DEV_CXXFLAGS=

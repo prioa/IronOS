@@ -147,6 +147,7 @@ static void setBoostPreview(uint8_t) {}
 
 // ---- Interface v2 ----
 volatile uint8_t pendingPWM              = 0;
+void             telemetryFrameSent() {} // ts101_telemetry.cpp: the host has no block at 0x20000000
 const uint16_t   powerPWM                = 255;
 int32_t          powerSupplyWattageLimit = 65;
 

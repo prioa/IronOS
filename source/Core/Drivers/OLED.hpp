@@ -118,6 +118,7 @@ public:
   // Draws a number at the current cursor location
   static void printNumber(uint16_t number, uint8_t places, FontStyle fontStyle, bool noLeaderZeros = true);
   // Clears the buffer
+  static const uint8_t *framebuffer() { return screenBuffer + FRAMEBUFFER_START; } // the picture the OLED gets, 512 bytes
   static void clearScreen() { memset(stripPointers[0], 0, OLED_WIDTH * (OLED_HEIGHT / 8)); }
   // Draws the battery level symbol
   static void drawBattery(uint8_t state) { drawSymbol(3 + (state > 10 ? 10 : state)); }

@@ -5,6 +5,7 @@
  *      Author: Ralim
  */
 
+#include "ts101_telemetry.hpp"
 #include "BSP.h"
 #include "FreeRTOS.h"
 #include "Settings.h"
@@ -120,6 +121,9 @@ void startPIDTask(void const *argument __unused) {
         detectThermalRunaway(currentTipTempInC, 0);
       }
       setOutputx10WattsViaFilters(x10WattsOut);
+#ifdef TS101_TELEMETRY
+      telemetryUpdate(currentTipTempInC, x10WattsOut); // copies at 8 Hz, nothing more in the loop
+#endif
     } else {
       // ADC interrupt timeout
       setTipPWM(0, false);

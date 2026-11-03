@@ -11,6 +11,7 @@
 #include "cmsis_os.h"
 #include "configuration.h"
 #include <OLED.hpp>
+#include "ts101_telemetry.hpp"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -162,6 +163,9 @@ void OLED::refresh() {
   if (checkDisplayBufferChecksum()) {
     oled_bulk_write(0, 0, OLED_WIDTH, OLED_HEIGHT, screenBuffer + FRAMEBUFFER_START);
     // I2C is soft i2c, do not have to wait here
+#ifdef TS101_TELEMETRY
+    telemetryFrameSent();
+#endif
   }
 }
 
@@ -177,6 +181,9 @@ void OLED::refresh() {
   if (checkDisplayBufferChecksum()) {
     const int len = FRAMEBUFFER_START + (OLED_WIDTH * (OLED_HEIGHT / 8));
     I2C_CLASS::Transmit(DEVICEADDR_OLED, screenBuffer, len);
+#ifdef TS101_TELEMETRY
+    telemetryFrameSent();
+#endif
     // DMA tx time is ~ 20mS Ensure after calling this you delay for at least 25ms
     // or we need to goto double buffering
   }

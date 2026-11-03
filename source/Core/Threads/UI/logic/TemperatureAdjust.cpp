@@ -19,6 +19,13 @@ int8_t dogPresetIndex() {
   return -1;
 }
 
+// Straight to preset i (0-4), from the telemetry block's command; every preset is below the maximum
+void dogSetPreset(uint8_t i) {
+  if (i < PRESET_COUNT) {
+    setSettingValue(SettingsOptions::SolderingTemp, presets()[i]);
+  }
+}
+
 // A click while soldering: the next solder preset in that direction, staying at the ends so a click can't jump from one end to the other
 void dogJumpPreset(bool up) {
   const uint16_t current = getSettingValue(SettingsOptions::SolderingTemp);
