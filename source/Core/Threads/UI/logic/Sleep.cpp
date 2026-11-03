@@ -50,7 +50,9 @@ OperatingMode gui_SolderingSleepingMode(const ButtonState buttons, guiContext *c
   // Interface v2: moved, or a button let go, wakes the iron at once, back to soldering on the solder
   // (the rear button may be on its way to a stop: only letting go wakes the iron, even if it moves meanwhile)
   if (!dogPressed(false) && !cxt->scratch_state.state4 && !shouldBeSleeping()) {
-    dogPressConsumed(); // a click that woke the iron must not reach soldering, where it would change the solder
+    if (xTaskGetTickCount() - lastButtonTime < TICKS_SECOND / 2) {
+      dogPressConsumed(); // a click that woke the iron must not reach soldering, where it would change the solder
+    } // woken by moving: the next press already counts, a boost straight away too
     return cxt->previousMode;
   }
 #endif

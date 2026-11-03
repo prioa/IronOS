@@ -80,6 +80,25 @@ into reference images for `preview/compare.py`.
   The animation is drawn upright, for holding the iron with the tip up: the dog with cap, sunglasses and bag walks in from
   the cable end and stands there smoking.
 
+## Interface v2
+
+Since 2026-11-03 every screen is drawn on one grid of 128x32 (`ts101_v2_grid.hpp`): on the left the name (A, x 0-93),
+row 2 with a state label or a warning (B) and the temperature curve at 8 samples a second (C, both x 0-92); on the right
+the reading in helvB10 (D), arrow and target in 3x5 (E) and two 15x14 key boxes or one wide one (F). The boxes always show
+what the button does now.
+
+- **Fonts**: helvB08 and helvB10 from u8g2 (`fonts/*.bdf`, Adobe/DEC notice in the files) and an own 3x5 font
+  (`art/font3x5.txt`), icons in `art/icons_v2.txt`; `make_fonts_v2.py` writes `ts101_v2_fonts.h/.cpp`.
+- **Soldering** (`ts101_v2_solder.cpp`): one screen for HEIZT, BEREIT, KÜHLT, LAST, BOOST and GESPERRT; - and + move one
+  solder, holding front boosts the solder + 50 degrees for 30 s at most, holding rear stops. A shake (`ts101_v2_shake.cpp`)
+  swaps the left side for a table of the sensors with a wipe; Anzeige > Sensoren can switch it by itself instead.
+- **Home** (`ts101_v2_home.cpp`): the solder, AUS or HEISS with the supply, the curve, menu and start.
+- **Sleep** (`ts101_v2_sleep.cpp`): a screen saver with the dog of `ts101_screensaver_dog.h`, no grid and no keys.
+- **Warnings**: row 2 inverted; critical ones also say what happened in the name row and have one wide key.
+- **Menu**: entry, section and position, the next entry; numbers in helvB10 with their unit, words in helvB08.
+
+The screens before v2 stay in the sources behind `TS101_DOG_UI_V1`, which no build defines; their bitmaps stay in `art/`.
+
 ## Building
 
 ```sh
@@ -104,6 +123,9 @@ the mocks with the count of differing pixels. `preview/test_buttons.sh` runs the
 and checks rule 2 on every screen and the #1663 case. `preview/page.py <out dir> <out dir EN> out.html` puts every screen with
 the rules and the button table on one page. `preview/check_home.py <out dir>` checks the home screen pixel by pixel (button
 pair, dog at rest and when tilted, statistics limit, arrow, curve). Needs `clang++` and a built `source/Core/Gen`.
+For v2: `preview/check_v2.py <out dir>` checks the grid's pixel rules, `preview/sheet_v2.py <out dir> out.png` makes the
+contact sheet grouped by screen, and `preview/test_shake.sh` runs the shake detector over synthetic readings (still, soldering,
+knocks, taps, wiping, shakes).
 
 ## Flashing from macOS
 

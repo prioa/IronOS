@@ -402,7 +402,7 @@ static void drawNext(uint8_t section, uint8_t pos) {
   for (uint8_t i = 0; i < 3; i++) {
     gridFill(i, 26 + i, 4 - i, 26 + i); // 5 wide, 3 high, on the middle of the capitals
   }
-  dogText(dogFontName, 8, 31, text);
+  dogText(dogFontName, 7, 31, text); // 2 px after the triangle
   gridClipAll();
 }
 
@@ -524,11 +524,11 @@ const char *dogMenuRowOverflow() {
     for (uint8_t i = 0; i < sections[sct].count; i++) {
       const DogMenuItem &item = sections[sct].items[i];
       if (dogTextWidth(dogFontName, nameOf(item)) > GRID_NAME_END + 1) {
-        return nameOf(item);
+        return nameOf(item); // the name row
       }
       toCapitals(text, nameOf(item));
-      if (8 + dogTextWidth(dogFontName, text) > GRID_LEFT_END + 1) {
-        return nameOf(item);
+      if (7 + dogTextWidth(dogFontName, text) > GRID_LEFT_END + 1) {
+        return nameOf(item); // row 3, as the next entry
       }
       formatRange(item, text);
       if (dogTextWidth(dogFontName, text) > GRID_LEFT_END + 1) {

@@ -102,17 +102,8 @@ int main() {
   idle(500);
 
   puts("== Start");
-  const uint16_t view = getSettingValue(SettingsOptions::DogHomeVariant);
   click(false);
-  expectMode(OperatingMode::HomeScreen, "Klick hinten am Start bleibt auf dem Start");
-  expect(getSettingValue(SettingsOptions::DogHomeVariant) == (view + 1) % DOG_HOME_VIEWS, "und zeigt die nächste Ansicht");
-  for (int i = 1; i < DOG_HOME_VIEWS; i++) {
-    click(false);
-  }
-  expect(getSettingValue(SettingsOptions::DogHomeVariant) == view, "nach fünf Klicks wieder die erste");
-  hold(false, 800);
-  expectMode(OperatingMode::SettingsMenu, "Halten hinten am Start öffnet das Menü");
-  expect(getSettingValue(SettingsOptions::DogHomeVariant) == view, "und schaltet dabei keine Ansicht weiter");
+  expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü (Kästchen ≡)");
   toHome();
   click(true);
   expectMode(OperatingMode::Soldering, "Klick vorne startet das Löten");
@@ -137,7 +128,7 @@ int main() {
   expectMode(OperatingMode::HomeScreen, "Loslassen danach startet nichts");
   startSoldering();
   step(true, false, 1000);
-  expect(currentTempTargetDegC == 420, "Boost läuft");
+  expect(currentTempTargetDegC == setPoint() + 50, "Boost läuft, Lot + 50°");
   step(true, true, 60);
   expectMode(OperatingMode::HomeScreen, "beide Tasten stoppen auch im Boost");
   idle(300);
@@ -212,11 +203,11 @@ int main() {
   setSettingValue(SettingsOptions::SolderingTemp, 320);
   startSoldering();
   step(true, false, 1500);
-  expect(currentTempTargetDegC == 420, "Halten vorne boostet auf 420");
+  expect(currentTempTargetDegC == setPoint() + 50, "Halten vorne boostet auf Lot + 50°");
   expect(dogBoostSecondsLeft() <= 30 && dogBoostSecondsLeft() >= 28, "Restzeit läuft von 30 s");
   moved();
   step(true, false, 20000);
-  expect(currentTempTargetDegC == 420, "nach 21,5 s läuft er noch");
+  expect(currentTempTargetDegC == setPoint() + 50, "nach 21,5 s läuft er noch");
   moved();
   step(true, false, 9000);
   expect(currentTempTargetDegC == 320, "nach 30,5 s ist Schluss, Taste noch unten");
@@ -227,7 +218,7 @@ int main() {
   idle(1000);
   moved();
   step(true, false, 1500);
-  expect(currentTempTargetDegC == 420, "nach dem Loslassen geht er wieder");
+  expect(currentTempTargetDegC == setPoint() + 50, "nach dem Loslassen geht er wieder");
 
   puts("== #1663: direkt nach dem Boost");
   idle(60);
@@ -255,11 +246,11 @@ int main() {
     }
   };
   setSettingValue(SettingsOptions::SolderingTemp, 335);
-  hold(false, 800);
-  expectMode(OperatingMode::SettingsMenu, "Halten hinten am Start öffnet das Menü");
+  click(false);
+  expectMode(OperatingMode::SettingsMenu, "Klick hinten am Start öffnet das Menü");
   animated = false;
-  toEntry(8);
-  expect(!animated, "acht Klicks hinten: nichts schiebt");
+  toEntry(7);
+  expect(!animated, "sieben Klicks hinten: nichts schiebt");
   expectMode(OperatingMode::SettingsMenu, "und wieder auf dem ersten Eintrag, kein Ende");
   hold(true, 800);
   expectMode(OperatingMode::SettingsMenu, "Halten vorne auf einem Eintrag tut nichts");
@@ -280,7 +271,7 @@ int main() {
   click(false);
   expect(setPoint() == 335, "nach 2 s ohne Taste zurück auf dem Eintrag: hinten ist wieder nächster Eintrag");
   expectMode(OperatingMode::SettingsMenu, "bleibt im Menü");
-  toEntry(7); // wieder Eigenes Ziel
+  toEntry(6); // wieder Eigenes Ziel
   click(true);
   hold(false, 800);
   click(true);
@@ -297,15 +288,7 @@ int main() {
   setSettingValue(SettingsOptions::SolderingTemp, 320);
 
   puts("== Auswahl: Sperre, Klick vorne sofort nächster Wert");
-  toEntry(4); // Startbild
-  const uint16_t homeView = getSettingValue(SettingsOptions::DogHomeVariant);
-  click(true);
-  expect(getSettingValue(SettingsOptions::DogHomeVariant) == (homeView + 1) % DOG_HOME_VIEWS, "Startbild: vorne sofort die nächste Ansicht");
-  for (int i = 1; i < DOG_HOME_VIEWS; i++) {
-    click(true);
-  }
-  expect(getSettingValue(SettingsOptions::DogHomeVariant) == homeView, "nach der letzten wieder die erste");
-  toEntry(1); // Sperre
+  toEntry(4); // Sperre
   setSettingValue(SettingsOptions::LockingMode, 0);
   click(true);
   expect(getSettingValue(SettingsOptions::LockingMode) == 1, "vorne: Nur Boost, sofort");
@@ -344,14 +327,15 @@ int main() {
   expect(getSettingValue(SettingsOptions::OLEDInversion) == !inverted, "Schalter: vorne schaltet sofort um");
   click(true);
   expect(getSettingValue(SettingsOptions::OLEDInversion) == inverted, "nochmal schaltet zurück");
-  toEntry(4); // Detailansicht
+  toEntry(4); // Sensoren
   click(true);
-  expect(getSettingValue(SettingsOptions::DogSolderView) == 1, "Detailansicht schaltet");
+  expect(getSettingValue(SettingsOptions::DogSensorMode) == 1, "Sensoren: vorne sofort auf Wechseln");
   click(true);
+  expect(getSettingValue(SettingsOptions::DogSensorMode) == 0, "und wieder Schütteln");
   hold(false, 1000);
 
   puts("== Info");
-  toEntry(3); // Info
+  toEntry(2); // Info
   click(true);
   click(true);
   expectMode(OperatingMode::SettingsMenu, "Info: vorne auf einer normalen Seite tut nichts");
@@ -422,16 +406,13 @@ int main() {
   testSetTip(150);
   moved();
   idle(60);
-  expectMode(OperatingMode::Sleeping, "Bewegung: erst schaut der Hund auf");
-  expect(dogSleepWakeFrame >= 1, "Bild 1 von 3");
-  idle(500);
-  expectMode(OperatingMode::Soldering, "Bewegung weckt");
+  expectMode(OperatingMode::Soldering, "Bewegung weckt sofort, zurück zum Löt-Screen");
   expect(dogWokeHeating, "nach dem Schlaf wieder der Heizen-Screen");
   moved();
   step(true, false, 1000);
-  expect(currentTempTargetDegC == 420, "Boost beim Heizen nach dem Schlaf");
+  expect(currentTempTargetDegC == setPoint() + 50, "Boost beim Heizen nach dem Schlaf");
   idle(200);
-  expect(!dogWokeHeating, "nach dem Boost der Löt-Screen");
+  expect(!dogWokeHeating, "nach dem Boost kein Heizen-Merker mehr");
   step(true, true, 60);
   idle(300);
   testSetTip(30);
