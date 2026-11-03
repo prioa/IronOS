@@ -35,10 +35,6 @@ void nextSettingValue(const enum SettingsOptions o) {
     settings[o] = (settings[o] + 1) % 3;
     return;
   }
-  if (o == SettingsOptions::DogHomeVariant) { // and the five home views
-    settings[o] = (settings[o] + 1) % DOG_HOME_VIEWS;
-    return;
-  }
   const bool twoStates = o == SettingsOptions::OLEDInversion || o == SettingsOptions::TemperatureInF || o == SettingsOptions::ReverseButtonTempChangeEnabled || o == SettingsOptions::CalibrateCJC || o == SettingsOptions::DogSolderView;
   settings[o]          = (twoStates && settings[o] >= 1) ? 0 : settings[o] + 1;
 }

@@ -29,11 +29,6 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
     lockNoticeUntil = xTaskGetTickCount() + TICKS_SECOND * 3 / 2;
     return OperatingMode::HomeScreen;
   }
-  if (dogHoldDone(false, DOG_HOLD_FULL)) { // holding the rear button opens the menu
-    dogPressConsumed();
-    cxt->transitionMode = TransitionAnimation::Right;
-    return OperatingMode::SettingsMenu;
-  }
   switch (buttons) {
   case BUTTON_F_SHORT:
     if (!isTipDisconnected()) {
@@ -45,10 +40,9 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
       return OperatingMode::Soldering;
     }
     break;
-  case BUTTON_B_SHORT: // a click shows the next home view; saved with the counters on this screen
-    setSettingValue(SettingsOptions::DogHomeVariant, (getSettingValue(SettingsOptions::DogHomeVariant) + 1) % DOG_HOME_VIEWS);
-    dogSettingsChanged();
-    break;
+  case BUTTON_B_SHORT: // the rear key shows the menu icon
+    cxt->transitionMode = TransitionAnimation::Right;
+    return OperatingMode::SettingsMenu;
   default:
     break;
   }

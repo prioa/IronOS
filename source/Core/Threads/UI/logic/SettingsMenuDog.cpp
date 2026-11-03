@@ -11,7 +11,7 @@
 #include "ui_drawing.hpp"
 #ifdef TS101_DOG_UI
 
-enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse, Section, Info, HomeView };
+enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse, Section, Info };
 
 struct DogMenuItem {
   const char     *de, *en;
@@ -33,7 +33,6 @@ static const DogMenuItem rootItems[] = {
     {"Löten", "Iron", SECTION(1), Fmt::Section, nullptr},
     {"Schlaf", "Sleep", SECTION(2), Fmt::Section, nullptr},
     {"Anzeige", "Display", SECTION(3), Fmt::Section, nullptr},
-    {"Startbild", "Home view", OPT(DogHomeVariant), Fmt::HomeView, nullptr},
     {"Sperre", "Lock", OPT(LockingMode), Fmt::Lock, nullptr},
     {"Info", "Info", SECTION(DOG_MENU_SECTION_INFO), Fmt::Section, nullptr},
     {"Zurücksetzen", "Reset", NO_OPTION, Fmt::Action, dogSetResetSettings},
@@ -194,12 +193,6 @@ static void formatValue(const DogMenuItem &item, char *out) {
   case Fmt::Unit:
     strcpy(out, v ? "°F" : "°C");
     break;
-  case Fmt::HomeView: {
-    static const char *const de[] = {"Hund", "Symbole", "Schäfer", "Abkühlen", "Kolben"};
-    static const char *const en[] = {"Dog", "Icons", "Shepherd", "Cooling", "Iron"};
-    strcpy(out, T(de[v < DOG_HOME_VIEWS ? v : 0], en[v < DOG_HOME_VIEWS ? v : 0]));
-    break;
-  }
   case Fmt::Rotation: {
     static const char *const de[] = {"Rechts", "Links", "Auto"};
     static const char *const en[] = {"Right", "Left", "Auto"};
@@ -507,7 +500,6 @@ const char *dogMenuRowOverflow() {
         for (uint16_t v : samples) {
           // The settings only take values their limits allow; these are the ones this format can show
           if (item.format == Fmt::Logo && v > 6) continue;
-          if (item.format == Fmt::HomeView && v >= DOG_HOME_VIEWS) continue;
           if (item.format == Fmt::SleepTime && v > 15) continue;
           if (item.format == Fmt::Minutes && v > 60) continue;
           if (item.format == Fmt::Watts && v > MAX_POWER_LIMIT) continue;

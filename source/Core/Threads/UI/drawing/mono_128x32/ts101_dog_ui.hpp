@@ -106,11 +106,7 @@ extern uint16_t         dogSessionMinutes;   // soldering minutes since power on
 void dogCountSession();                      // a soldering session started; saved on the home screen
 void dogCountBoost();                        // a boost started; saved on the home screen
 
-// The home views besides the dog (DogHomeVariant 1-4, ts101_dog_home_views.cpp). A rear click on the home screen picks the next
-#define DOG_HOME_VIEWS 5
-void     dogDrawHomeView(uint8_t view, uint16_t shownTemperature);
 void     dogDrawHomeHead(int16_t x); // the dog's head as on the home screen, following the sensor
-void     dogDrawSmallIron();         // the small iron of the home screen, lying as the real one does
 int16_t  dogHomeRollDeg();           // the tilt as the viewer sees it, positive with the left side down
 extern bool dogIronSteady; // the newest reading is about gravity alone, not the hand's moving
 bool     dogIronLie(int16_t &along, int16_t &turn); // from the newest reading: the long axis (tip down +) and the turn about it (0 board up)
@@ -122,7 +118,7 @@ uint16_t dogHomeHistoryAt(uint8_t i); // 0 is the oldest, in C
 
 // Tip temperature history for the sparkline and the rate, in C whatever the display shows
 void dogCurveReset();
-#define DOG_CURVE_SAMPLE_TICKS (TICKS_100MS * 2) // one sample a column
+#define DOG_CURVE_SAMPLE_TICKS (TICKS_SECOND / 8) // one sample a column, 8 a second
 void dogCurveSample(uint16_t tipC, TickType_t interval = DOG_CURVE_SAMPLE_TICKS);
 // The sparkline of the soldering screen, x 0-56 and y 23-31 on a fixed scale of 0-420 C: the newest sample on the right, neighbours
 // joined with vertical strokes, the set point dotted across the full width
@@ -131,6 +127,8 @@ void dogDrawCurve(uint16_t setC);
 // the set point, so the dotted set line (every 3rd pixel) jumps with a change of solder
 void dogDrawCurveStage(int16_t x0, uint8_t width, uint8_t y0, uint8_t y1, uint16_t setC);
 int32_t dogCurveRateC(); // degrees C a second over the last second
+uint8_t  dogCurveCount();             // samples kept, at most 93
+uint16_t dogCurveAt(uint8_t back);    // 0 is the newest, in C
 
 // Lifetime soldering time, counted while soldering mode runs the heater and saved when back on the home screen
 void dogCountSolderTime();

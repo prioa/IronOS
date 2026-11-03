@@ -23,6 +23,7 @@ char *dogFormatTime(char *out, uint16_t major, uint8_t minor) {
 }
 
 uint32_t dogBlitRows = 0xFFFFFFFF;
+int16_t  dogClipX0 = 0, dogClipX1 = OLED_WIDTH - 1;
 
 void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *data) {
   for (uint8_t page = 0; page < height / 8; page++) {
@@ -30,7 +31,7 @@ void dogBlit(int16_t x, int8_t y, uint8_t width, uint8_t height, const uint8_t *
       uint8_t bits = data[page * width + col];
       for (uint8_t bit = 0; bits && bit < 8; bit++) {
         int16_t px = x + col, py = y + page * 8 + bit;
-        if (((bits >> bit) & 1) && px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT && ((dogBlitRows >> py) & 1)) {
+        if (((bits >> bit) & 1) && px >= dogClipX0 && px <= dogClipX1 && px >= 0 && px < OLED_WIDTH && py >= 0 && py < OLED_HEIGHT && ((dogBlitRows >> py) & 1)) {
           OLED::drawFilledRect(px, py, px, py, false);
         }
       }
@@ -83,7 +84,7 @@ bool dogHandleTooHot() {
 #define DOG_CURVE_BOTTOM  31
 #define DOG_CURVE_RANGE   8  // rows above the bottom one
 #define DOG_CURVE_MAX_C   420
-#define DOG_RATE_SAMPLES  5  // a second of samples
+#define DOG_RATE_SAMPLES  8  // a second of samples
 static uint16_t   curve[DOG_CURVE_SAMPLES];
 static uint8_t    curveHead  = 0; // next slot to write
 static uint8_t    curveCount = 0;
@@ -158,6 +159,9 @@ void dogDrawCurveStage(int16_t x0, uint8_t width, uint8_t y0, uint8_t y1, uint16
     OLED::drawFilledRect(x0 + i, y < prev ? y : prev, x0 + i, y < prev ? prev : y, false);
   }
 }
+
+uint8_t  dogCurveCount() { return curveCount; }
+uint16_t dogCurveAt(uint8_t back) { return curveAt(back); }
 
 int32_t dogCurveRateC() {
   const uint8_t steps = curveCount > DOG_RATE_SAMPLES ? DOG_RATE_SAMPLES : (curveCount ? curveCount - 1 : 0);

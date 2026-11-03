@@ -542,10 +542,6 @@ void     dogDrawHomeHead(int16_t x) {
 }
 
 void dogDrawHome(uint16_t shownTemperature) {
-  if (getSettingValue(SettingsOptions::DogHomeVariant)) {
-    dogDrawHomeView(getSettingValue(SettingsOptions::DogHomeVariant), shownTemperature);
-    return;
-  }
   static bool hot = false; // the tip is still hot: the number blinks if the setting asks for it
   const uint16_t tipC = TipThermoModel::getTipInC();
   if (tipC > 55) {
@@ -560,7 +556,6 @@ void dogDrawHome(uint16_t shownTemperature) {
   drawStatistics(x0);
   drawTemperature(normal() ? OLED_WIDTH - 1 : 33, shownTemperature, blank);
   drawHistory(x0);
-  dogDrawSmallIron(); // under the statistics, on the curve
   drawKeyHints();
   drawPose(normal() ? 0 : OLED_WIDTH - DOG_POSE_SIZE, hopRow);
 }

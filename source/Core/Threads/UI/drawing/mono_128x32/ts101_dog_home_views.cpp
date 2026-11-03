@@ -8,7 +8,7 @@
  * Turned the other way round, the head moves to the other side; the shepherd's screen stays as it is, the iron's tip is where the real one is.
  */
 #include "ts101_dog_ui.hpp"
-#ifdef TS101_DOG_UI
+#if defined(TS101_DOG_UI) && defined(TS101_DOG_UI_V1) // interface v2: out of the build, kept as the source of the old views
 #include "OLED.hpp"
 #include "Settings.h"
 #include "TipThermoModel.h"
