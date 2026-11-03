@@ -210,6 +210,29 @@ std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 600000; // 10 min after power on
   return {
       // name, ticks, tip, set, x10 W, x10 V, -, draw
+      {"h01_aus", T, 24, 350, 0, 201, false,
+       [] {
+         curve(24, {{24, 93}});
+         ui_draw_homescreen_simplified(24);
+       }},
+      {"h02_heiss", T, 183, 350, 0, 201, false,
+       [] {
+         curve(350, {{350, 30}, {183, 63}});
+         ui_draw_homescreen_simplified(183);
+       }},
+      {"h04_menue_gedrueckt", T, 24, 350, 0, 201, false,
+       [] {
+         curve(24, {{24, 93}});
+         pressed(false, 100);
+         ui_draw_homescreen_simplified(24);
+       }},
+      {"h03_sperre_an", T, 24, 350, 0, 201, false,
+       [] {
+         settings[SettingsOptions::LockingMode] = 1;
+         curve(24, {{24, 93}});
+         dogHomeLockNotice(true);
+         ui_draw_homescreen_simplified(24);
+       }},
       {"l01_heizt", T, 212, 350, 650, 201, false,
        [] {
          curve(30, {{212, 60}});

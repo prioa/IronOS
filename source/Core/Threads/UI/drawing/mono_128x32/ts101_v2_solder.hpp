@@ -14,6 +14,9 @@ uint16_t       dogSolderTarget(bool boost);       // in the unit shown
 uint16_t       dogBoostOffset();
 uint8_t        dogPwmPercent();
 char          *dogFormatX10(char *out, uint32_t x10, const char *unit); // "20.0V"
+void           dogDrawHomeV2(uint16_t shownTemperature); // ts101_v2_home.cpp
+void           dogHomeLockNotice(bool locked);           // the lock gesture: row 2 says what it did, for 1.5 s
+bool           dogHomeCooling();
 char          *dogFormatUnit(char *out, int32_t value, const char *unit); // "-12°"
 #endif
 #endif

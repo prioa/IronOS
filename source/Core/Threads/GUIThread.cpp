@@ -48,7 +48,7 @@ OperatingMode guiHandleDraw(void) {
   ButtonState buttons = getButtonState();
 #ifdef TS101_DOG_UI
   buttons = dogButtonsPoll(buttons);
-  dogHomeTick();
+  // interface v2: the home screen draws the 8 Hz curve itself, the 10 minute history is gone
   dogFastFrames = false; // the boost screen sets it again while it is drawn
 #endif
   // Enforce screen on if buttons pressed, movement, hot tip etc

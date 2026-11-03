@@ -2,12 +2,12 @@
 #include "Buttons.hpp"
 #include "OperatingModes.h"
 #include "ts101_dog_ui.hpp"
+#include "ts101_v2_solder.hpp"
 #include "ui_drawing.hpp"
 
 bool showExitMenuTransition = false;
 
 #ifdef TS101_DOG_UI
-static TickType_t lockNoticeUntil = 0; // says what the lock gesture just did
 
 static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext *cxt) {
   if (buttons != BUTTON_NONE && cxt->scratch_state.state1 == 0) {
@@ -26,7 +26,7 @@ static OperatingMode handleDogHomeButtons(const ButtonState buttons, guiContext 
     if (getSettingValue(SettingsOptions::LockingMode)) {
       dogLockArmed = !dogLockArmed;
     } // with SPERRE on Aus the notice says that, instead of the gesture doing nothing
-    lockNoticeUntil = xTaskGetTickCount() + TICKS_SECOND * 3 / 2;
+    dogHomeLockNotice(dogLockArmed);
     return OperatingMode::HomeScreen;
   }
   switch (buttons) {
@@ -114,15 +114,7 @@ OperatingMode drawHomeScreen(const ButtonState buttons, guiContext *cxt) {
   }
 #ifdef TS101_DOG_UI
   dogSetLocked(false);
-  if (xTaskGetTickCount() < lockNoticeUntil) {
-    if (getSettingValue(SettingsOptions::LockingMode)) {
-      dogWarnLocked(dogLockArmed, BUTTON_NONE);
-    } else {
-      dogDrawNotice(iconLock, DOG_T("AUS", "OFF"), DOG_T("SPERRE IM MENÜ AUS", "LOCK OFF IN THE MENU"));
-    }
-  } else {
-    ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
-  }
+  ui_draw_homescreen_simplified(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : tipTemp);
   return handleDogHomeButtons(buttons, cxt);
 #else
   if (getSettingValue(SettingsOptions::DetailedIDLE)) {

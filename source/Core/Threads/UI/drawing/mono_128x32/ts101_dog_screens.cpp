@@ -8,6 +8,7 @@
 #include "SolderingCommon.h"
 #include "power.hpp"
 #include "ts101_dog_home_assets.h"
+#include "ts101_v2_solder.hpp"
 #include "ui_drawing.hpp"
 #include "../../../../../version.h"
 
@@ -535,7 +536,7 @@ void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
     dogDrawNotice(iconWarning, dogAlert == DogAlert::Handle ? DOG_T("GRIFF!", "GRIP!") : DOG_T("HEIZUNG!", "HEATER!"), alertFooter(text));
     return;
   }
-  dogDrawHome(tipTemp);
+  dogDrawHomeV2(tipTemp);
 }
 
 /*
