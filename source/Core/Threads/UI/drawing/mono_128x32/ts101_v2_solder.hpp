@@ -17,6 +17,8 @@ char          *dogFormatX10(char *out, uint32_t x10, const char *unit); // "20.0
 void           dogDrawHomeV2(uint16_t shownTemperature); // ts101_v2_home.cpp
 void           dogHomeLockNotice(bool locked);           // the lock gesture: row 2 says what it did, for 1.5 s
 bool           dogHomeCooling();
+void           dogDrawCritical(const char *name, const char *row2, uint16_t shownTemperature, const char *key);
+bool           dogWarnUser(const char *text); // false: the text needs the stock screen
 char          *dogFormatUnit(char *out, int32_t value, const char *unit); // "-12°"
 #endif
 #endif

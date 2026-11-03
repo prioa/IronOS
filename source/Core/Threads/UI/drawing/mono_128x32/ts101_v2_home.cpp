@@ -9,6 +9,7 @@
 #ifdef TS101_DOG_UI
 #include "OperatingModes.h"
 #include "power.hpp"
+#include "Translation.h"
 #include "ui_drawing.hpp"
 #include <string.h>
 
@@ -67,5 +68,86 @@ void dogDrawHomeV2(uint16_t shownTemperature) {
     gridTarget(-1, 0);
   }
   gridKeys(&iconV2Menu, &iconV2Play);
+}
+#endif
+
+#ifdef TS101_DOG_UI
+/*
+ * Warnings. Not critical: only row 2, the whole of it inverted, starting with "!". Critical: also the name row says what
+ * happened, the arrow down (the heater is off) and one wide key, since both buttons do the same.
+ */
+void dogDrawCritical(const char *name, const char *row2, uint16_t shownTemperature, const char *key) {
+  dogCurveSample(TipThermoModel::getTipInC());
+  gridName(name);
+  gridWarn(row2);
+  gridCurve(false, 0);
+  gridTemp(shownTemperature);
+  gridTarget(-1, 0);
+  if (key) {
+    gridWideKey(key);
+  } else {
+    gridKeys(&iconV2Menu, nullptr); // no tip: the menu still opens, there is nothing to start
+  }
+}
+
+// The stock texts are stored in the IronOS fonts' own encoding, not as letters: the ones the TS101 can show get their own words
+struct DogStockWarning {
+  const char *de, *en;
+};
+static bool stockWarning(const char *text, DogStockWarning &out) {
+  const struct {
+    const char     *stock;
+    DogStockWarning own;
+  } table[] = {
+      {translatedString(Tr->SettingsResetMessage), {"! EINSTELLUNGEN ZURÜCKGESETZT", "! SETTINGS RESET"}},
+      {translatedString(Tr->NoAccelerometerMessage), {"! KEIN LAGESENSOR", "! NO MOTION SENSOR"}},
+      {translatedString(Tr->NoPowerDeliveryMessage), {"! KEIN USB-PD-CHIP", "! NO USB-PD CHIP"}},
+      {translatedString(Tr->DeviceFailedValidationWarning), {"! GERÄT NICHT ECHT?", "! DEVICE NOT GENUINE?"}},
+      {translatedString(Tr->CalibrationDone), {"! KALIBRIERT", "! CALIBRATED"}},
+      {translatedString(Tr->ResetOKMessage), {"! ZURÜCKGESETZT", "! RESET DONE"}},
+  };
+  for (const auto &row : table) {
+    if (row.stock == text) {
+      out = row.own;
+      return true;
+    }
+  }
+  return false;
+}
+
+// The stock firmware's warnings (settings reset, no sensor, calibration and the like) as a warning in row 2 of the home screen.
+// Wider than the row it runs through it, with a pause at both ends
+bool dogWarnUser(const char *text) {
+  DogStockWarning own;
+  if (!stockWarning(text, own)) {
+    return false;
+  }
+  const char *row = DOG_T(own.de, own.en);
+  static TickType_t shownSince = 0, lastShown = 0;
+  const TickType_t  now        = xTaskGetTickCount();
+  if (now - lastShown > TICKS_SECOND / 2) {
+    shownSince = now; // a new warning: the text from its start
+  }
+  lastShown = now;
+  OLED::clearScreen();
+  dogCurveSample(TipThermoModel::getTipInC());
+  gridName(dogSolderName());
+  const int16_t width = dogTextWidth(dogFontName, row) + 2;
+  int16_t       shift = 0;
+  if (width > GRID_LEFT_END + 1) {
+    const int16_t  over   = width - GRID_LEFT_END - 1;
+    const uint32_t pause  = 20;                     // frames at 25 a second
+    const uint32_t period = pause * 2 + over * 2;   // 2 frames a pixel
+    const uint32_t t      = ((xTaskGetTickCount() - shownSince) / (TICKS_SECOND / 25)) % period;
+    shift                 = t < pause ? 0 : (t < pause + over * 2 ? (t - pause) / 2 : over);
+  }
+  gridClip(0, GRID_LEFT_END);
+  dogText(dogFontName, 1 - shift, GRID_ROW2_BASE, row);
+  gridInvert(0, GRID_ROW2_TOP, GRID_LEFT_END, GRID_ROW2_BOT);
+  gridClipAll();
+  gridCurve(false, 0);
+  gridTemp(getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::getTipInF() : TipThermoModel::getTipInC());
+  gridWideKey("OK");
+  return true;
 }
 #endif

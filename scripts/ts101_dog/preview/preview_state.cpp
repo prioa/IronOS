@@ -157,6 +157,9 @@ static void setAngle(int degrees) { // the iron's long axis against the horizon,
   dogAccelRaw[2] = 0;
 }
 
+uint32_t availableW10(uint8_t) { return (uint32_t)vX10 * vX10 / getTipResistanceX10(); } // power.cpp: P = V^2 / R
+bool     warnUser(const char *warning, const ButtonState buttons);
+
 static void pwm(uint8_t percent) { pendingPWM = percent * 255 / 100; }
 
 // The curve at 8 samples a second up to the scene's time: from start through each step's temperature over its samples
@@ -222,6 +225,50 @@ std::vector<PreviewScene> previewScenes() {
   const uint32_t T = 600000; // 10 min after power on
   return {
       // name, ticks, tip, set, x10 W, x10 V, -, draw
+      {"w01_netzteil", T, 330, 350, 440, 201, false,
+       [] {
+         powerSupplyWattageLimit = 45;
+         curve(30, {{330, 93}});
+         pwm(100);
+         solder();
+         powerSupplyWattageLimit = 65;
+       }},
+      {"w02_griff_heiss", T, 312, 350, 0, 201, false,
+       [] {
+         dogAlert = DogAlert::Handle;
+         curve(350, {{350, 80}, {312, 13}});
+         ui_draw_homescreen_simplified(312);
+         dogAlert = DogAlert::None;
+       }},
+      {"w03_heizung_gestoert", T, 96, 350, 0, 201, false,
+       [] {
+         dogAlert = DogAlert::Thermal;
+         curve(30, {{120, 80}, {96, 13}});
+         ui_draw_homescreen_simplified(96);
+         dogAlert = DogAlert::None;
+       }},
+      {"w04_keine_spitze", T, 0, 350, 0, 201, false,
+       [] {
+         tipMissing = true;
+         curve(0, {{0, 93}});
+         ui_draw_homescreen_simplified(0);
+         tipMissing = false;
+       }},
+      {"w05_hinweis_start", T, 24, 350, 0, 201, false,
+       [] {
+         curve(24, {{24, 93}});
+         warnUser(translatedString(Tr->SettingsResetMessage), BUTTON_NONE);
+       }},
+      {"w06_hinweis_laeuft", T, 24, 350, 0, 201, false,
+       [] {
+         curve(24, {{24, 93}});
+         const uint32_t end = previewTicks;
+         for (uint32_t t = 0; t <= 2400; t += 40) { // 2.4 s into the warning
+           previewTicks = end - 2400 + t;
+           OLED::clearScreen();
+           warnUser(translatedString(Tr->SettingsResetMessage), BUTTON_NONE);
+         }
+       }},
       {"s01_hereinlaufen", T, 150, 150, 0, 201, false, [] { sleepAt(14); }},
       {"s02_abbremsen", T, 150, 150, 0, 201, false, [] { sleepAt(33); }},
       {"s03_sitzen", T, 150, 150, 0, 201, false, [] { sleepAt(40); }},

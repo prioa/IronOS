@@ -28,7 +28,7 @@ void dogDrawNotice(const uint8_t *icon, const char *word, const char *footer);
 bool dogWarnLocked(bool locked, ButtonState buttons);
 
 // Something stopped the heater and the home screen has to say why, until a button is pressed and it is safe again
-enum class DogAlert : uint8_t { None, Handle, Thermal };
+enum class DogAlert : uint8_t { None, Handle, Thermal, LowVoltage };
 extern DogAlert dogAlert;
 bool dogHandleTooHot(); // above DOG_HANDLE_LIMIT_X10C for long enough not to be a glitch
 

@@ -2,8 +2,17 @@
 #include "OperatingModeUtilities.h"
 #include "OperatingModes.h"
 #include "ts101_dog_ui.hpp"
+#include "ts101_v2_solder.hpp"
 #ifdef OLED_128x32
 bool warnUser(const char *warning, const ButtonState buttons) {
+#ifdef TS101_DOG_UI
+  if (dogWarnUser(warning)) { // interface v2: in row 2 of the home screen
+    if ((xTaskGetTickCount() - lastButtonTime) > TICKS_SECOND * 5) {
+      return true;
+    }
+    return buttons != BUTTON_NONE;
+  }
+#endif
   OLED::clearScreen();
   // Centre the warning on the panel instead of top-left aligning it.
   const uint8_t *text = reinterpret_cast<const uint8_t *>(warning);

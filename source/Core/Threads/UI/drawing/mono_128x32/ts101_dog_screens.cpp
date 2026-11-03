@@ -516,26 +516,23 @@ void ui_draw_soldering_basic_sleep(TemperatureType_t tipTemp) { drawSleepScreen(
 /*
  * Home: the screen itself is in ts101_dog_home.cpp, alerts replace it
  */
-static const char *alertFooter(char *text) {
-  switch (dogAlert) {
-  case DogAlert::Handle: {
-    char *end = dogFormat(text, getHandleTemperature(0) / 10);
-    strcpy(end, DOG_T("°: HEIZUNG AUS", "°: HEATER OFF"));
-    return text;
-  }
-  default:
-    return DOG_T("AUS: SPITZE PRÜFEN", "OFF: CHECK THE TIP");
-  }
-}
-
 void ui_draw_homescreen_simplified(TemperatureType_t tipTemp) {
-  if (isTipDisconnected()) {
-    dogDrawNotice(iconWarning, DOG_T("SPITZE!", "NO TIP!"), DOG_T("KEINE SPITZE ERKANNT", "CONNECT A TIP"));
+  // Interface v2: the critical warnings on the home screen; the heater is off
+  switch (dogAlert) {
+  case DogAlert::Handle:
+    dogDrawCritical(DOG_T("Griff zu heiß", "Grip too hot"), DOG_T("! HEIZUNG AUS", "! HEATER OFF"), tipTemp, "HOME");
     return;
+  case DogAlert::Thermal:
+    dogDrawCritical(DOG_T("Heizung gestört", "Heater fault"), DOG_T("! HEIZUNG AUS", "! HEATER OFF"), tipTemp, "HOME");
+    return;
+  case DogAlert::LowVoltage:
+    dogDrawCritical(DOG_T("Unterspannung", "Low voltage"), DOG_T("! HEIZUNG AUS", "! HEATER OFF"), tipTemp, "HOME");
+    return;
+  default:
+    break;
   }
-  if (dogAlert != DogAlert::None) {
-    char text[20];
-    dogDrawNotice(iconWarning, dogAlert == DogAlert::Handle ? DOG_T("GRIFF!", "GRIP!") : DOG_T("HEIZUNG!", "HEATER!"), alertFooter(text));
+  if (isTipDisconnected()) {
+    dogDrawCritical(DOG_T("Keine Spitze", "No tip"), DOG_T("! SPITZE PRÜFEN", "! CHECK THE TIP"), tipTemp, nullptr);
     return;
   }
   dogDrawHomeV2(tipTemp);

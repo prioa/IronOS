@@ -18,6 +18,7 @@
 #include <string.h>
 
 extern volatile uint8_t pendingPWM; // BSP.cpp: the pulse the PID thread asked for, of powerPWM
+extern int32_t          powerSupplyWattageLimit; // the PD contract in watts, 0 without one
 
 #define READY_WITHIN    3                      // |reading - target| below this is at the set point
 #define LOAD_ON_PCT     40                     // the set point was reached and the heater works this hard: under load
@@ -272,8 +273,22 @@ static void drawSide(bool sensors, bool boost) {
   }
 }
 
+// Not critical, it heats on: the PD contract gives less than the tip would draw at the voltage there is (P = V^2 / R)
+static void checkSupply() {
+  static char text[16];
+  if (!warning && powerSupplyWattageLimit > 0 && powerSupplyWattageLimit * 10 < (int32_t)availableW10(0)) {
+    dogFormatUnit(text, powerSupplyWattageLimit, "W");
+    char row[24];
+    strcpy(row, DOG_T("! NETZTEIL ", "! SUPPLY "));
+    strcat(row, text);
+    strcpy(text, row);
+    warning = text;
+  }
+}
+
 void dogDrawSolderScreen(bool boost) {
   const TickType_t now = xTaskGetTickCount();
+  checkSupply();
   dogFastSensorUntil   = now + TICKS_SECOND / 2; // the sensor every 40 ms, for the shake
   const bool wanted    = wantedSensors(boost, now);
   if (wanted != sensorsShown) {
