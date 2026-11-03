@@ -15,6 +15,9 @@
 #include "Pins.h"
 #include "QC3.h"
 #include "SC7A20.hpp"
+#ifdef TS101_DOG_UI
+#include "ts101_v2_shake.hpp"
+#endif
 #include "Settings.h"
 #include "TipThermoModel.h"
 #include "cmsis_os.h"
@@ -185,6 +188,7 @@ void startMOVTask(void const *argument __unused) {
     dogAccelRaw[0] = tx;
     dogAccelRaw[1] = ty;
     dogAccelRaw[2] = tz;
+    dogShakeFeed(tx, ty, tz, xTaskGetTickCount());
 #endif
     if (getSettingValue(SettingsOptions::OrientationMode) == 2) {
       if (rotation != ORIENTATION_FLAT) {

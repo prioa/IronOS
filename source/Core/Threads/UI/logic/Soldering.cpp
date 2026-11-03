@@ -2,6 +2,7 @@
 #include "OperatingModes.h"
 #include "SolderingCommon.h"
 #include "ts101_dog_ui.hpp"
+#include "ts101_v2_solder.hpp"
 #include "ui_drawing.hpp"
 // State 1 = button locking  (0:unlocked+released, 1:unlocked, 2:locked, 3:locked+released)
 // State 2 = boost mode
@@ -70,8 +71,8 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
     cxt->scratch_state.state2 = 0;
     cxt->scratch_state.state1 = 0;
     break;
-  case BUTTON_F_LONG:
-    if (getSettingValue(SettingsOptions::BoostTemp) && dogPressed(true)) {
+  case BUTTON_F_LONG: // interface v2: boost is always there, the solder + 50 degrees
+    if (dogPressed(true)) {
       cxt->scratch_state.state2 = 1;
     }
     break;
@@ -94,9 +95,10 @@ static OperatingMode handleDogButtons(const ButtonState buttons, guiContext *cxt
 #endif
 
 #ifdef TS101_DOG_UI
-#define DOG_WARN_UNLOCKING(buttons) dogWarnLocked(false, buttons)
-#define DOG_WARN_LOCKING(buttons)   dogWarnLocked(true, buttons)
-#define DOG_WARN_LOCKED(buttons)    dogWarnLocked(true, buttons)
+// Interface v2: the soldering screen itself says GESPERRT and shows the locks in both boxes, no notice covers it
+#define DOG_WARN_UNLOCKING(buttons) (true)
+#define DOG_WARN_LOCKING(buttons)   (true)
+#define DOG_WARN_LOCKED(buttons)    (true)
 #else
 #define DOG_WARN_UNLOCKING(buttons) warnUser(translatedString(Tr->UnlockingKeysString), buttons)
 #define DOG_WARN_LOCKING(buttons)   warnUser(translatedString(Tr->LockingKeysString), buttons)
@@ -141,7 +143,11 @@ OperatingMode handleSolderingButtons(const ButtonState buttons, guiContext *cxt)
       cxt->scratch_state.state2 = 0;
       break;
     case BUTTON_F_LONG:
+#ifdef TS101_DOG_UI
+      if (getSettingValue(SettingsOptions::LockingMode) == lockingMode_t::BOOST) {
+#else
       if (getSettingValue(SettingsOptions::BoostTemp) && (getSettingValue(SettingsOptions::LockingMode) == lockingMode_t::BOOST)) {
+#endif
         cxt->scratch_state.state2 = 1;
         break;
       }
@@ -229,6 +235,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
       dogWokeHeating = true; // heating back up to the solder: the heating screen until the set point is there again
       dogCurveReset();       // the samples before the sleep say nothing about now: a fresh sparkline and rate
     }
+    dogSolderViewReset();
   }
   if (dogLockArmed && cxt->scratch_state.state1 < 2) {
     cxt->scratch_state.state1 = 2; // switched on at the start, it holds for the whole session, also after sleep
@@ -238,13 +245,21 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #endif
 
   // Update the setpoints for the temperature
+#ifdef TS101_DOG_UI
+  if (cxt->scratch_state.state2) {
+    const uint16_t boost  = dogSolderTarget(true); // interface v2: the solder + 50 degrees
+    currentTempTargetDegC = getSettingValue(SettingsOptions::TemperatureInF) ? TipThermoModel::convertFtoC(boost) : boost;
+  } else
+#else
   if (cxt->scratch_state.state2) {
     if (getSettingValue(SettingsOptions::TemperatureInF)) {
       currentTempTargetDegC = TipThermoModel::convertFtoC(getSettingValue(SettingsOptions::BoostTemp));
     } else {
       currentTempTargetDegC = (getSettingValue(SettingsOptions::BoostTemp));
     }
-  } else {
+  } else
+#endif
+  {
     if (getSettingValue(SettingsOptions::TemperatureInF)) {
       currentTempTargetDegC = TipThermoModel::convertFtoC(getSettingValue(SettingsOptions::SolderingTemp));
     } else {
@@ -284,11 +299,7 @@ OperatingMode gui_solderingMode(const ButtonState buttons, guiContext *cxt) {
 #endif
   // Draw in the screen details
 #ifdef TS101_DOG_UI
-  if (getSettingValue(SettingsOptions::DogSolderView) == 1) {
-    ui_draw_soldering_power_status(cxt->scratch_state.state2);
-  } else {
-    ui_draw_soldering_basic_status(cxt->scratch_state.state2);
-  }
+  ui_draw_soldering_basic_status(cxt->scratch_state.state2); // one screen; the sensor view is part of it
 #else
   if (getSettingValue(SettingsOptions::DetailedSoldering)) {
     ui_draw_soldering_power_status(cxt->scratch_state.state2);

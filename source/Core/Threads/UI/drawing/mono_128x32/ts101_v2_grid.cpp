@@ -6,6 +6,8 @@
 #include "OLED.hpp"
 #include <string.h>
 
+int16_t gridOuterX0 = 0, gridOuterX1 = OLED_WIDTH - 1;
+
 static inline int16_t maxOf(int16_t a, int16_t b) { return a > b ? a : b; }
 static inline int16_t minOf(int16_t a, int16_t b) { return a < b ? a : b; }
 

@@ -11,7 +11,7 @@
 #include "ui_drawing.hpp"
 #ifdef TS101_DOG_UI
 
-enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse, Section, Info };
+enum class Fmt : uint8_t { Action, OnOff, Stage, Temp, BoostTemp, SleepTemp, SleepTime, Minutes, Autostart, Lock, Tip, DcCutoff, PdMode, PdTimeout, Watts, Unit, Rotation, Plain, Animation, Logo, Pulse, Section, Info, SensorMode };
 
 struct DogMenuItem {
   const char     *de, *en;
@@ -38,7 +38,6 @@ static const DogMenuItem rootItems[] = {
     {"Zurücksetzen", "Reset", NO_OPTION, Fmt::Action, dogSetResetSettings},
 };
 static const DogMenuItem solderItems[] = {
-    {"Boost-Ziel", "Boost target", OPT(BoostTemp), Fmt::BoostTemp, nullptr},
     {"Autostart", "Autostart", OPT(AutoStartMode), Fmt::Autostart, nullptr},
     {"Spitze", "Tip", OPT(SolderingTipType), Fmt::Tip, nullptr},
     {"Leistung", "Power", OPT(PowerLimit), Fmt::Watts, nullptr},
@@ -62,7 +61,7 @@ static const DogMenuItem displayItems[] = {
     {"Einheit", "Unit", OPT(TemperatureInF), Fmt::Unit, nullptr},
     {"Animation", "Animation", OPT(AnimationSpeed), Fmt::Animation, nullptr},
     {"Logo", "Logo", OPT(LOGOTime), Fmt::Logo, nullptr},
-    {"Detailansicht", "Detail view", OPT(DogSolderView), Fmt::OnOff, nullptr},
+    {"Sensoren", "Sensors", OPT(DogSensorMode), Fmt::SensorMode, nullptr},
     {"Tasten tausch.", "Swap buttons", OPT(ReverseButtonTempChangeEnabled), Fmt::OnOff, nullptr},
 };
 static const DogMenuItem infoItems[DOG_INFO_PAGES] = {
@@ -192,6 +191,9 @@ static void formatValue(const DogMenuItem &item, char *out) {
     break;
   case Fmt::Unit:
     strcpy(out, v ? "°F" : "°C");
+    break;
+  case Fmt::SensorMode:
+    strcpy(out, v ? T("Wechseln", "Switch") : T("Schütteln", "Shake"));
     break;
   case Fmt::Rotation: {
     static const char *const de[] = {"Rechts", "Links", "Auto"};

@@ -132,6 +132,7 @@ void dogPressConsumed() {
 }
 
 void dogSetLocked(bool isLocked) { locked = isLocked; }
+bool dogLocked() { return locked; }
 
 bool dogHoldDone(bool front, TickType_t full) { return dogHeldTicks(front) >= full; }
 

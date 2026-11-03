@@ -70,6 +70,7 @@ bool       dogPressed(bool front);          // down on its own, and not left ove
 TickType_t dogHeldTicks(bool front);        // how long it has been down, 0 if not dogPressed
 void       dogPressConsumed();              // the press did its job: it counts for nothing more until released
 void       dogSetLocked(bool locked);       // button lock: no field inverts and no bar fills
+bool       dogLocked();
 bool       dogHoldDone(bool front, TickType_t full); // held long enough for the action
 
 // The settings menu, drawn on its own for the preview. Sections: 0 the top level, 1 solder, 2 sleep, 3 display, 4 info

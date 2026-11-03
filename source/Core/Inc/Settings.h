@@ -82,8 +82,8 @@ enum SettingsOptions {
   LEDMode                        = 57, // Status LED mode
   CalibrationOffset2             = 58, // Calibration offset for the second tip socket
   TotalSolderMinutes             = 59, // Lifetime minutes at soldering temperature (TS101_DOG_UI, no menu entry)
-  DogSolderView                  = 60, // Detail view while soldering (TS101_DOG_UI)
-  DogHomeVariant                 = 61, // Which home screen: 0 dog, 1 icons, 2 shepherd, 3 cooling, 4 iron (TS101_DOG_UI)
+  DogSolderView                  = 60, // The view picked with a shake while soldering: 0 normal, 1 sensors (TS101_DOG_UI)
+  DogSensorMode                  = 61, // The sensor view while soldering: 0 by a shake, 1 by itself every few seconds (TS101_DOG_UI)
   TotalSolderSessions            = 62, // Lifetime count of soldering sessions (TS101_DOG_UI, no menu entry)
   TotalBoosts                    = 63, // Lifetime count of boosts (TS101_DOG_UI, no menu entry)
   //

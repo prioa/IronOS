@@ -32,10 +32,19 @@
 #define GRID_KEY_REAR_X  96
 #define GRID_KEY_FRONT_X 113
 
-// What dogBlit and the grid's rectangles may touch, in columns; everything outside is left alone
+// What dogBlit and the grid's rectangles may touch, in columns; everything outside is left alone. The zones clip within an outer
+// range, which the wipe between the soldering views sets
 extern int16_t dogClipX0, dogClipX1;
-inline void    gridClip(int16_t x0, int16_t x1) { dogClipX0 = x0, dogClipX1 = x1; }
-inline void    gridClipAll() { gridClip(0, OLED_WIDTH - 1); }
+extern int16_t gridOuterX0, gridOuterX1;
+inline void    gridClip(int16_t x0, int16_t x1) {
+  dogClipX0 = x0 > gridOuterX0 ? x0 : gridOuterX0;
+  dogClipX1 = x1 < gridOuterX1 ? x1 : gridOuterX1;
+}
+inline void gridClipAll() { gridClip(0, OLED_WIDTH - 1); }
+inline void gridOuter(int16_t x0, int16_t x1) {
+  gridOuterX0 = x0, gridOuterX1 = x1;
+  gridClipAll();
+}
 
 void gridFill(int16_t x0, int16_t y0, int16_t x1, int16_t y1);   // lit, within the clip
 void gridInvert(int16_t x0, int16_t y0, int16_t x1, int16_t y1); // within the clip

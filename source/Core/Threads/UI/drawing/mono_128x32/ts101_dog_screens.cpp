@@ -115,6 +115,7 @@ static void drawUnderTemp(const char *text, bool check = false) {
 }
 
 // The legs: frames advance at fpsX10 / 10 a second, from the time and not the frame rate of the screen
+#ifdef TS101_DOG_UI_V1 // interface v2: replaced by ts101_v2_solder.cpp
 static const uint8_t *trotFrame(uint32_t fpsX10) {
   static const uint8_t *const frames[] = {dogTrot0, dogTrot1, dogTrot2, dogTrot3};
   static TickType_t           last     = 0;
@@ -143,8 +144,10 @@ static void drawTrot(int16_t x, const uint8_t *frame, int16_t yBack, int16_t yFr
   }
 }
 
+#endif
 static uint16_t setPoint() { return getSettingValue(SettingsOptions::SolderingTemp); }
 
+#ifdef TS101_DOG_UI_V1 // interface v2: replaced by ts101_v2_solder.cpp
 /*
  * Boost, while the front button is held, 30 s at most:
  *   [bolt BOOST]             400°
@@ -430,6 +433,7 @@ void ui_draw_soldering_power_status(bool boostModeOn) {
   drawBig(getTipTemp());
 }
 
+#endif
 /*
  * Sleep: no buttons on this screen, so it stays the same way round when the iron is turned
  *   dog  z z z  SCHLAF         ^ 150°
